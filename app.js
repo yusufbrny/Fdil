@@ -892,12 +892,14 @@ function checkSynQuiz(btn, chosen, correct) {
 
 // ===== GLOBAL SEARCH =====
 let globalSearchTimer = null;
+let globalSearchApiCache = JSON.parse(localStorage.getItem('ydt_global_search_cache') || '{}');
+
 function onGlobalSearch(val) {
   clearTimeout(globalSearchTimer);
   globalSearchTimer = setTimeout(() => renderGlobalSearch(val), 200);
 }
 
-function renderGlobalSearch(val) {
+async function renderGlobalSearch(val) {
   const norm = val.trim().toLowerCase();
   const normalContent = document.getElementById('home-normal-content');
   const searchContent = document.getElementById('home-search-content');
@@ -930,15 +932,33 @@ function renderGlobalSearch(val) {
     }
   });
 
-  if (results.length === 0) {
-    resultsEl.innerHTML = `<div class="search-empty"><div class="search-empty-icon">🔍</div><div style="font-size:16px;font-weight:700;color:var(--text)">Sonuç bulunamadı</div><div style="font-size:13px;margin-top:6px">"${esc(val)}" için eşleşme yok</div></div>`;
-    return;
-  }
-
   function highlight(text, q) {
     const idx = text.toLowerCase().indexOf(q);
     if (idx === -1) return esc(text);
     return esc(text.slice(0, idx)) + '<mark>' + esc(text.slice(idx, idx + q.length)) + '</mark>' + esc(text.slice(idx + q.length));
+  }
+
+  if (results.length === 0) {
+    resultsEl.innerHTML = `<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="margin-top:10px;color:var(--text3)">API'de aranıyor...</div></div>`;
+    
+    // Search via API
+    const apiData = await fetchDictData(norm);
+    if (apiData) {
+      globalSearchApiCache[norm] = apiData;
+      localStorage.setItem('ydt_global_search_cache', JSON.stringify(globalSearchApiCache));
+      resultsEl.innerHTML = `
+        <div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:4px">🌐 API sonucu</div>
+        <div class="search-result-item" onclick="showDictWordDetail('${escQ(apiData.word)}')">
+          <div>
+            <div class="search-result-word">${highlight(apiData.word, norm)}</div>
+            <div class="search-result-meaning">${highlight(apiData.turkish || apiData.meanings?.[0]?.definitions?.[0] || '', norm)}</div>
+          </div>
+          <span class="search-result-badge" style="background:rgba(46,204,113,0.15);color:#2ecc71;border-color:rgba(46,204,113,0.3)">🌐 Sözlük</span>
+        </div>`;
+    } else {
+      resultsEl.innerHTML = `<div class="search-empty"><div class="search-empty-icon">🔍</div><div style="font-size:16px;font-weight:700;color:var(--text)">Sonuç bulunamadı</div><div style="font-size:13px;margin-top:6px">"${esc(val)}" için eşleşme yok</div></div>`;
+    }
+    return;
   }
 
   resultsEl.innerHTML = `<div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:4px">${results.length} sonuç bulundu</div>` +
@@ -960,6 +980,11 @@ function renderGlobalSearch(val) {
         <span class="search-result-badge">Ünite ${r.unit}</span>
       </div>`;
     }).join('');
+}
+
+function showDictWordDetail(word) {
+  dictSearchWord(word);
+  showScreen('screen-dict');
 }
 
 // ===== WORD DETAIL MODAL =====
@@ -4964,6 +4989,11 @@ function renderReadingHome() {
     `;
 }
 
+let readingFlashCards = [];
+let readingFlashIdx = 0;
+let readingFlashKnown = [];
+let readingFlashUnknown = [];
+
 function openReading(id) {
     const passage = READING_PASSAGES.find(p => p.id === id);
     if (!passage) return;
@@ -4989,13 +5019,113 @@ function openReading(id) {
                 <div style="font-size:12px;font-weight:700;color:var(--success);margin-bottom:6px">TÜRKÇE ÇEVIRI</div>
                 <div style="font-size:14px;line-height:1.8;color:var(--text)">${passage.turkish}</div>
             </div>
-            <div style="margin-bottom:8px;font-size:14px;font-weight:700;color:var(--text)">📝 Kelime Bilgisi</div>
-            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
                 ${passage.keywords.map(w => `<div onclick="dictSearchWord('${w}')" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;font-size:14px;font-weight:600;color:var(--accent)">${w}</div>`).join('')}
             </div>
+            <button onclick="startReadingFlash(${id})" style="width:100%;padding:14px;background:rgba(155,89,182,0.15);color:#9b59b6;border:1.5px solid rgba(155,89,182,0.3);border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">
+                🃏 Kelimeleri Flash Kartla Çalış
+            </button>
             <div style="margin-top:16px;font-size:12px;color:var(--text3);text-align:center">Kelimelere tıklayarak sözlükte ara</div>
         </div>
     `;
+}
+
+async function startReadingFlash(id) {
+    const passage = READING_PASSAGES.find(p => p.id === id);
+    if (!passage || passage.keywords.length === 0) { showToast('Bu metinde kelime yok!'); return; }
+    
+    showScreen('screen-reading');
+    readingFlashCards = [];
+    readingFlashIdx = 0;
+    readingFlashKnown = [];
+    readingFlashUnknown = [];
+    
+    for (const kw of passage.keywords) {
+        const data = await fetchDictData(kw);
+        readingFlashCards.push({
+            word: kw,
+            turkish: data?.turkish || '',
+            definition: data?.meanings?.[0]?.definitions?.[0] || '',
+            example: data?.meanings?.[0]?.example || ''
+        });
+    }
+    
+    readingFlashCards = shuffle(readingFlashCards);
+    renderReadingFlash(id);
+}
+
+function renderReadingFlash(id) {
+    const s = document.getElementById('screen-reading');
+    if (readingFlashIdx >= readingFlashCards.length) {
+        const known = readingFlashKnown.length;
+        const total = readingFlashCards.length;
+        s.innerHTML = `
+            <div class="result-wrap">
+                <div class="result-emoji">${known === total ? '🏆' : known > total / 2 ? '💪' : '📚'}</div>
+                <div class="result-title">${known === total ? 'Mükemmel!' : 'Sonuçlar'}</div>
+                <div class="result-sub">${total} kelimeden ${known} tanesini bildiniz</div>
+                <div class="stat-row">
+                    <div class="stat-box"><div class="stat-num" style="color:var(--success)">${known}</div><div class="stat-lbl">Bildim ✓</div></div>
+                    <div class="stat-box"><div class="stat-num" style="color:var(--error)">${readingFlashUnknown.length}</div><div class="stat-lbl">Bilmedim ✗</div></div>
+                </div>
+                ${readingFlashUnknown.length > 0 ? `<button class="result-btn" onclick="readingFlashCards=shuffle([...readingFlashUnknown]);readingFlashIdx=0;readingFlashKnown=[];readingFlashUnknown=[];renderReadingFlash(${id})">Bilemediklerimi Tekrar Et</button>` : ''}
+                <button class="result-btn outline" onclick="openReading(${id})">← Geri Dön</button>
+            </div>`;
+        return;
+    }
+    
+    const card = readingFlashCards[readingFlashIdx];
+    const pct = Math.round((readingFlashIdx / readingFlashCards.length) * 100);
+    
+    s.innerHTML = `
+        <div class="unit-header">
+            <button class="back-btn" onclick="openReading(${id})">←</button>
+            <div>
+                <div class="unit-title-h">🃏 Reading Flash</div>
+                <div class="unit-sub">${readingFlashIdx + 1}/${readingFlashCards.length}</div>
+            </div>
+        </div>
+        <div class="flash-wrap">
+            <div class="flash-progress-row">
+                <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+                <span class="flash-counter-badge">${readingFlashIdx + 1}/${readingFlashCards.length}</span>
+            </div>
+            <div class="flash-card-wrap">
+                <div class="flash-card" id="reading-fc" onclick="flipReadingCard()">
+                    <div class="flash-face flash-front">
+                        <div class="flash-hint">İngilizce</div>
+                        <div class="flash-word">${esc(card.word)}</div>
+                        <div class="flash-hint-bottom">ortaya dokun — kartı çevir</div>
+                    </div>
+                    <div class="flash-face flash-back">
+                        <div class="flash-hint" style="color:rgba(255,255,255,0.7)">Türkçe</div>
+                        <div class="flash-meaning">${esc(card.turkish) || 'Çeviri bulunamadı'}</div>
+                        ${card.definition ? `<div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:8px;padding:8px;background:rgba(0,0,0,0.15);border-radius:8px">${esc(card.definition)}</div>` : ''}
+                    </div>
+                </div>
+            </div>
+            <button class="flash-flip-btn" onclick="event.stopPropagation();flipReadingCard()">🔄 Kartı Çevir</button>
+            <div class="swipe-btn-row">
+                <button class="swipe-btn wrong" onclick="readingFlashAnswer(false, ${id})">✗ Bilmedim</button>
+                <button class="swipe-btn right" onclick="readingFlashAnswer(true, ${id})">✓ Bildim</button>
+            </div>
+        </div>`;
+}
+
+function flipReadingCard() {
+    const fc = document.getElementById('reading-fc');
+    if (fc) fc.classList.toggle('flipped');
+}
+
+function readingFlashAnswer(known, id) {
+    const card = readingFlashCards[readingFlashIdx];
+    if (known) {
+        readingFlashKnown.push(card);
+    } else {
+        readingFlashUnknown.push(card);
+    }
+    readingFlashIdx++;
+    setTimeout(() => renderReadingFlash(id), 300);
 }
 
 function toggleReadingWord(btn, id) {
@@ -5016,6 +5146,8 @@ function toggleReadingWord(btn, id) {
 window.showReading = showReading;
 window.openReading = openReading;
 window.toggleReadingWord = toggleReadingWord;
+window.startReadingFlash = startReadingFlash;
+window.renderReadingFlash = renderReadingFlash;
 
 // ===== DICTIONARY =====
 let dictCache = JSON.parse(localStorage.getItem('ydt_dict_cache') || '{}');
@@ -5029,13 +5161,30 @@ function _saveDictHistory() {
 }
 
 async function fetchTurkishMeaning(word) {
+    const cacheKey = `ydt_tr_${word.toLowerCase().trim()}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) return cached;
+    
     try {
         const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|tr`);
         const data = await response.json();
         if (data.responseStatus === 200 && data.responseData?.translatedText) {
-            return data.responseData.translatedText;
+            const result = data.responseData.translatedText.trim();
+            localStorage.setItem(cacheKey, result);
+            return result;
         }
     } catch (e) {}
+    
+    try {
+        const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q=${encodeURIComponent(word)}`);
+        const data = await response.json();
+        if (data && data[0] && data[0][0]) {
+            const result = data[0][0][0].trim();
+            localStorage.setItem(cacheKey, result);
+            return result;
+        }
+    } catch (e) {}
+    
     return '';
 }
 
