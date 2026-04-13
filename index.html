@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>FDil - YDT Kelime Öğrenme</title>
+  <meta name="description" content="YDT/DİL sınavı için kelime öğrenme uygulaması. Flash kartlar, testler, spaced repetition ve oyunlaştırma ile etkili öğrenme.">
+  <meta name="keywords" content="YDT, DİL, kelime, English vocabulary, YKS, sınav, flash kart, öğrenme">
+  <meta name="author" content="yusufbrny">
+  <meta name="robots" content="index, follow">
+  
+  <!-- PWA Meta -->
+  <meta name="theme-color" content="#628141" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#8BAE66" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="FDil">
+  <meta name="application-name" content="FDil - YDT Kelime">
+  <meta name="msapplication-TileColor" content="#628141">
+  <meta name="msapplication-tap-highlight" content="no">
+  
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="FDil">
+  <meta property="og:title" content="FDil - YDT Kelime Öğrenme">
+  <meta property="og:description" content="YDT/DİL sınavı için kelime öğrenme uygulaması. Flash kartlar, testler ve spaced repetition.">
+  <meta property="og:locale" content="tr_TR">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="FDil - YDT Kelime Öğrenme">
+  <meta name="twitter:description" content="YDT/DİL sınavı için kelime öğrenme uygulaması.">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%23628141' width='32' height='32' rx='6'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='white'>F</text></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%23628141' width='180' height='180' rx='40'/><text x='90' y='130' font-size='100' text-anchor='middle' fill='white'>F</text></svg>">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div id="app">
+    <div id="screen-home" class="screen active">
+      <div class="header">
+        <div>
+          <div class="header-logo">FDil YDT Kelime Tekrar</div>
+          <div class="header-sub">created by yusufbrny</div>
+          <div class="header-logo">Seni Çok Seviyorum ❤️</div>
+        </div>
+        <div class="header-actions">
+          <div id="gm-header-bar"></div>
+          <button class="theme-btn" onclick="toggleTheme()" id="theme-toggle-btn" title="Tema değiştir">🌙</button>
+          <button class="header-btn" onclick="showStats()">📊</button>
+          <button class="header-btn" onclick="showSettings()" title="Ayarlar">⚙️</button>
+        </div>
+      </div>
+      <div class="global-search-wrap">
+        <input class="global-search-input" id="global-search" placeholder="Tüm kelimelerde ara... (İng / Türkçe)"
+          oninput="onGlobalSearch(this.value)" autocomplete="off">
+      </div>
+      <div id="home-normal-content" class="home-content">
+        <div id="gm-goal-card" class="gm-goal-card-placeholder"></div>
+        <div id="quest-home-card" class="quest-home-card"></div>
+        <div id="sr-home-card"></div>
+        <div class="filter-row">
+          <span class="section-label">Üniteler</span>
+          <div class="pills">
+            <span class="pill active" onclick="filterUnits('all',this)">Tümü</span>
+            <span class="pill" onclick="filterUnits('incomplete',this)">Eksik</span>
+            <span class="pill" onclick="filterUnits('done',this)">Bitti</span>
+          </div>
+        </div>
+        <div class="home-grid" id="unit-grid"></div>
+        <div style="height:1px;background:var(--border);margin:8px 0;"></div>
+        <div class="home-card mix-card" onclick="showMixQuiz()">
+          <div>
+            <div class="home-card-title">🎲 Karışık Soru Modu</div>
+            <div class="home-card-sub">Tüm ünitelerden rastgele test</div>
+          </div>
+          <span style="color:#9b59b6;font-size:20px;font-weight:700">→</span>
+        </div>
+        <div class="home-card" onclick="showErrorBox()">
+          <div>
+            <div class="home-card-title">🏦 Hata Kumbarası <span id="error-count-main" class="home-card-badge">0</span>
+            </div>
+            <div class="home-card-sub">Yanlış bildiğin kelimeleri tekrarla</div>
+          </div>
+          <span style="color:var(--error);font-size:20px;font-weight:700">→</span>
+        </div>
+        <div class="home-card" onclick="showMyWords()" style="border-color:rgba(52,152,219,0.3)">
+          <div>
+            <div class="home-card-title" style="color:#3498db">📝 Kişisel Kelimelerim <span id="my-words-count-badge"
+                class="home-card-badge" style="background:#3498db;display:none">0</span></div>
+            <div class="home-card-sub">Bilmediğin kelimeleri birden fazla anlamıyla ekle</div>
+          </div>
+          <span style="color:#3498db;font-size:20px;font-weight:700">→</span>
+        </div>
+        <div class="home-card" onclick="showPhrasalVerbs()" style="border-color:rgba(230,126,34,0.3)">
+          <div>
+            <div class="home-card-title" style="color:#e67e22">🔗 Phrasal Verbs</div>
+            <div class="home-card-sub">Ünitelere göre deyimsel fiiller ve anlamları</div>
+          </div>
+          <span style="color:#e67e22;font-size:20px;font-weight:700">→</span>
+        </div>
+        <div class="home-card" onclick="showReading()" style="border-color:rgba(155,89,182,0.3)">
+          <div>
+            <div class="home-card-title" style="color:#9b59b6">📖 Günlük Reading</div>
+            <div class="home-card-sub">Kısa metinlerle kelime öğren</div>
+          </div>
+          <span style="color:#9b59b6;font-size:20px;font-weight:700">→</span>
+        </div>
+        <div class="home-card" onclick="showDictionary()" style="border-color:rgba(46,204,113,0.3)">
+          <div>
+            <div class="home-card-title" style="color:#2ecc71">📖 İngilizce Sözlük</div>
+            <div class="home-card-sub">Eş anlam, zıt anlam ve açıklama</div>
+          </div>
+          <span style="color:#2ecc71;font-size:20px;font-weight:700">→</span>
+        </div>
+      </div>
+      <div id="home-search-content" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+        <div class="search-results-wrap" id="search-results"></div>
+      </div>
+    </div>
+
+    <div id="screen-unit" class="screen">
+      <div class="unit-header">
+        <button class="back-btn" onclick="goHome()" aria-label="Geri">←</button>
+        <div>
+          <div class="unit-title-h" id="unit-screen-title">Ünite 1</div>
+          <div class="unit-sub" id="unit-screen-sub">75 kelime</div>
+        </div>
+      </div>
+      <div class="mode-scroll">
+        <div class="unit-progress-section">
+          <div class="unit-progress-label">Öğrenme İlerlemesi</div>
+          <div class="unit-progress-row">
+            <div class="progress-bar">
+              <div class="progress-fill" id="unit-progress-bar" style="width:0%"></div>
+            </div>
+            <span class="progress-txt" style="color:var(--accent)" id="unit-progress-txt">0%</span>
+          </div>
+        </div>
+        <div class="mode-grid">
+          <div class="mode-card highlight" onclick="startLearn()" style="grid-column: span 2;">
+            <div class="mode-card-icon">📖</div>
+            <div class="mode-card-title">Sözlük & Öğrenme</div>
+            <div class="mode-card-desc">Eş/Zıt anlamlılar, kelime ailesi ve örnekler</div>
+          </div>
+          <div class="mode-card" onclick="startFlash()">
+            <div class="mode-card-icon">🃏</div>
+            <div class="mode-card-title">Flash Kartlar</div>
+            <div class="mode-card-desc">Sağa kaydır = bildim</div>
+          </div>
+          <div class="mode-card" onclick="startMC()">
+            <div class="mode-card-icon">✅</div>
+            <div class="mode-card-title">Çoktan Seçmeli</div>
+            <div class="mode-card-desc">4 seçenekten doğruyu bul</div>
+          </div>
+          <div class="mode-card" onclick="startFIB('type')">
+            <div class="mode-card-icon">✏️</div>
+            <div class="mode-card-title">Boşluk Doldur</div>
+            <div class="mode-card-desc">Örnek cümleyi tamamla</div>
+          </div>
+          <div class="mode-card" onclick="startSynQuiz()">
+            <div class="mode-card-icon">🔁</div>
+            <div class="mode-card-title">Eş Anlam Quiz</div>
+            <div class="mode-card-desc">Eş anlamlı kelimeyi seç</div>
+          </div>
+          <div class="mode-card" onclick="startAntQuiz()">
+            <div class="mode-card-icon">⚡</div>
+            <div class="mode-card-title">Zıt Anlam Quiz</div>
+            <div class="mode-card-desc">Zıt anlamlı kelimeyi seç</div>
+          </div>
+          <div class="mode-card speed-mode-card" onclick="startSpeedMode()"
+            style="grid-column: span 2; border-color: rgba(231,76,60,0.4); background: linear-gradient(135deg, rgba(231,76,60,0.06), rgba(243,156,18,0.06));">
+            <div class="mode-card-icon">⏱️</div>
+            <div class="mode-card-title" style="color:#e74c3c">Hız Modu</div>
+            <div class="mode-card-desc">Geri sayım! Hızlı cevap = Bonus XP</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dynamic screens (filled by JS) -->
+    <div id="screen-flash" class="screen"></div>
+    <div id="screen-mc" class="screen"></div>
+    <div id="screen-fib" class="screen"></div>
+    <div id="screen-learn" class="screen"></div>
+    <div id="screen-error" class="screen"></div>
+    <div id="screen-mix" class="screen"></div>
+    <div id="screen-syn-quiz" class="screen"></div>
+    <div id="screen-ant-quiz" class="screen"></div>
+    <div id="screen-mywords" class="screen"></div>
+    <div id="screen-phrasal" class="screen"></div>
+    <div id="screen-phrasal-flash" class="screen"></div>
+    <div id="screen-phrasal-quiz" class="screen"></div>
+    <div id="screen-speed" class="screen"></div>
+    <div id="screen-general" class="screen"></div>
+    <div id="screen-dict" class="screen"></div>
+    <div id="screen-reading" class="screen"></div>
+
+  </div><!-- /app -->
+
+  <!-- Meta Edit Modal -->
+  <div id="meta-edit-overlay" class="word-modal-overlay" style="display:none"
+    onclick="if(event.target===this)closeMetaEdit()">
+    <div class="word-modal" id="meta-edit-content" style="max-height:85vh;overflow-y:auto;">
+      <div class="word-modal-handle"></div>
+    </div>
+  </div>
+
+  <div id="word-modal-overlay" class="word-modal-overlay" style="display:none"
+    onclick="if(event.target===this)closeWordModal()">
+    <div class="word-modal" id="word-modal-content">
+      <div class="word-modal-handle"></div>
+    </div>
+  </div>
+
+  <div id="stats-overlay" class="stats-overlay" style="display:none" onclick="if(event.target===this)closeStats()">
+    <div class="stats-panel" id="stats-panel">
+      <div class="stats-handle"></div>
+      <div class="stats-header">
+        <div class="stats-title">📊 Öğrenme İstatistikleri</div>
+        <button class="stats-close" onclick="closeStats()">Kapat ✕</button>
+      </div>
+      <div id="stats-content"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- data.js önce yüklenmeli (UNITS, RAW_META, PHRASAL_VERBS) -->
+  <script src="data.js"></script>
+  <!-- app.js sonra (tüm fonksiyonlar + gamification kodu içinde gömülü) -->
+  <script src="app.js"></script>
+  
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js')
+          .then(function(registration) {
+            console.log('SW registered:', registration.scope);
+          })
+          .catch(function(error) {
+            console.log('SW registration failed:', error);
+          });
+      });
+    }
+  </script>
+</body>
+
+</html>
