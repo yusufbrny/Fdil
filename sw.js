@@ -1,9 +1,14 @@
-const CACHE_NAME = 'fdil-v1.0.0';
+const CACHE_NAME = 'fdil-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/data.js',
+  './',
+  './index.html',
+  './manifest.json',
+  './data.js',
+  './app.js',
+  './style.css',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-512-maskable.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -38,19 +43,21 @@ self.addEventListener('fetch', (event) => {
       }
       
       return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
+        if (!response || response.status !== 200) {
           return response;
         }
         
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
+        if (response.type === 'basic' || response.type === 'cors') {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
         
         return response;
       }).catch(() => {
         if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
+          return caches.match('./index.html');
         }
         return new Response('Offline', { status: 503 });
       });
@@ -64,8 +71,8 @@ self.addEventListener('push', (event) => {
   const data = event.data.json();
   const options = {
     body: data.body || 'Bildirim içeriği',
-    icon: data.icon || '/icon-192.png',
-    badge: '/icon-96.png',
+    icon: data.icon || './icon-192.png',
+    badge: './icon-192.png',
     vibrate: [100, 50, 100],
     data: data.data || {},
     actions: data.actions || [],
@@ -81,7 +88,7 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
-  const urlToOpen = event.notification.data?.url || '/';
+  const urlToOpen = event.notification.data?.url || './';
   
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {

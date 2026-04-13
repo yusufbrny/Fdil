@@ -3,11 +3,15 @@
   "short_name": "FDil",
   "description": "YDT/DİL sınavı için kelime öğrenme uygulaması - Flash kartlar, testler, spaced repetition",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#F4F6F4",
   "theme_color": "#628141",
-  "orientation": "portrait-primary",
-  "scope": "./",
+  "lang": "tr-TR",
+  "dir": "ltr",
+  "categories": ["education"],
+  "id": "FDil",
   "icons": [
     {
       "src": "icon-192.png",
@@ -28,8 +32,7 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["education"],
-  "lang": "tr-TR",
-  "id": "FDil",
-  "dir": "ltr"
+  "screenshots": [],
+  "prefer_related_applications": false,
+  "related_applications": []
 }

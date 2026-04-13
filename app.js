@@ -16,6 +16,10 @@ let mixQuizCards = [];
 let mixIndex = 0, mixScore = 0, mixTotal = 0;
 let searchDebounceTimer = null;
 
+// PWA Install Prompt
+let deferredPrompt = null;
+let pwaInstallable = false;
+
 // SR State
 let _srData = JSON.parse(localStorage.getItem('ydt_sr_v1') || '{}');
 
@@ -4702,9 +4706,17 @@ function showSettings() {
                     <div class="settings-item">
                         <div class="settings-item-info">
                             <div class="settings-item-title">PWA Kurulumu</div>
-                            <div class="settings-item-desc">Ana ekrana ekle ve offline çalıştır</div>
+                            <div class="settings-item-desc" id="pwa-install-status">Ana ekrana ekle ve offline çalıştır</div>
                         </div>
-                        <button class="settings-btn" onclick="showToast('Menüden \"Ana Ekle\" seçeneğini kullan')">Nasıl?</button>
+                        <button class="settings-btn" id="pwa-install-btn" onclick="installPWA()" style="display:none">📲 Kur</button>
+                    </div>
+                    <div id="pwa-install-help" style="display:none;background:var(--bg);border-radius:12px;padding:16px;margin-top:8px">
+                        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">📱 PWA Nasıl Kurulur?</div>
+                        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+                            <div style="margin-bottom:8px"><b>Chrome/Edge:</b> Sağ üst menü → "Ana ekrana ekle" veya adres çubuğundaki + ikonu</div>
+                            <div style="margin-bottom:8px"><b>Safari (iOS):</b> Paylaş butonu → "Ana Ekrana Ekle"</div>
+                            <div style="margin-bottom:8px"><b>Firefox:</b> Sağ üst menü → "Uygulama kur" veya + ikonu</div>
+                        </div>
                     </div>
                 </div>
                 
@@ -4720,6 +4732,60 @@ function showSettings() {
 }
 
 window.showSettings = showSettings;
+
+// PWA Install Handler
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    pwaInstallable = true;
+    updatePWAInstallUI();
+});
+
+window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    pwaInstallable = false;
+    updatePWAInstallUI();
+    showToast('🎉 PWA kuruldu! Ana ekrandan açabilirsin');
+});
+
+function updatePWAInstallUI() {
+    setTimeout(() => {
+        const btn = document.getElementById('pwa-install-btn');
+        const status = document.getElementById('pwa-install-status');
+        const help = document.getElementById('pwa-install-help');
+        if (btn) {
+            if (pwaInstallable && deferredPrompt) {
+                btn.style.display = '';
+                btn.textContent = '📲 Kur';
+                if (status) status.textContent = 'Kurulum hazır!';
+            } else if (window.matchMedia('(display-mode: standalone)').matches) {
+                btn.style.display = 'none';
+                if (status) status.textContent = '✓ PWA olarak açık';
+            } else {
+                btn.style.display = 'none';
+                if (status) status.textContent = 'Tarayıcıda açık';
+            }
+        }
+        if (help) {
+            help.style.display = 'block';
+        }
+    }, 100);
+}
+
+async function installPWA() {
+    if (!deferredPrompt) {
+        showToast('PWA kurulumu tarayıcı tarafından desteklenmiyor');
+        return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+        showToast('🎉 Kurulum başladı!');
+    }
+    deferredPrompt = null;
+    pwaInstallable = false;
+    updatePWAInstallUI();
+}
 
 /* ────────────────────────────────────────────────────────────────
    STATS PANEL - Add Achievements
