@@ -606,18 +606,9 @@ function initFlashDrag() {
 
 function swipeCard(dir) {
   const fc = document.getElementById('fc');
-  if (fc) {
-    const isFlipped = fc.classList.contains('flipped');
-    fc.classList.remove('dragging');
-    fc.style.transition = 'transform 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.38s ease';
-    const baseFlip = isFlipped ? ' rotateY(180deg)' : '';
-    fc.style.transform = dir === 'right'
-      ? `translateX(110vw) rotate(22deg)${baseFlip}`
-      : `translateX(-110vw) rotate(-22deg)${baseFlip}`;
-    fc.style.opacity = '0';
-  }
   const word = currentCards[cardIndex];
   const unit = word._unit || currentUnit;
+  
   if (dir === 'right') {
     known.push(word);
     markLearned(unit, word[0]);
@@ -629,6 +620,18 @@ function swipeCard(dir) {
     errorBox['u' + unit + '_' + word[0]] = { word: word[0], meaning: word[1], unit };
     saveErrors();
   }
+  
+  if (fc) {
+    const isFlipped = fc.classList.contains('flipped');
+    fc.classList.remove('dragging');
+    fc.style.transition = 'transform 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.25s ease';
+    const baseFlip = isFlipped ? ' rotateY(180deg)' : '';
+    fc.style.transform = dir === 'right'
+      ? `translateX(120vw) rotate(25deg)${baseFlip}`
+      : `translateX(-120vw) rotate(-25deg)${baseFlip}`;
+    fc.style.opacity = '0';
+  }
+  
   setTimeout(() => {
     cardIndex++;
     if (word._fromErrors) {
@@ -637,7 +640,7 @@ function swipeCard(dir) {
     }
     else if (word._fromMix) renderMixFlash();
     else renderFlash();
-  }, 380);
+  }, 260);
 }
 
 function renderFlashResult(backFn) {
@@ -918,23 +921,35 @@ async function renderGlobalSearch(val) {
   searchContent.style.display = 'flex';
 
   const results = [];
+  
+  // Search in YDT units
   for (let u = 1; u <= 10; u++) {
     UNITS[u].words.forEach(w => {
       if (w[0].toLowerCase().includes(norm) || w[1].toLowerCase().includes(norm)) {
-        results.push({ word: w, unit: u, type: 'ydt' });
+        results.push({ word: w, unit: u, type: 'ydt', score: w[0].toLowerCase().startsWith(norm) ? 0 : 1 });
       }
     });
   }
   
-  // Search in General English words
+  // Search in custom vocabulary
+  customVocab.forEach((entry, idx) => {
+    if (entry.word.toLowerCase().includes(norm) || entry.meanings.some(m => m.toLowerCase().includes(norm))) {
+      results.push({ word: [entry.word, entry.meanings.join(' / '), entry.example || ''], unit: '📝', type: 'custom', idx, score: 2 });
+    }
+  });
+  
+  // Search in General English words cache
   const generalKeys = Object.keys(generalCache);
   generalKeys.forEach(w => {
     const data = generalCache[w];
     const def = data.definitions?.[0] || '';
     if (w.toLowerCase().includes(norm) || def.toLowerCase().includes(norm)) {
-      results.push({ word: [w, def, ''], unit: '🌐', type: 'general', data: data });
+      results.push({ word: [w, def, ''], unit: '🌐', type: 'general', data, score: 3 });
     }
   });
+
+  // Sort: exact matches first, then starts-with, then contains
+  results.sort((a, b) => a.score - b.score);
 
   function highlight(text, q) {
     const idx = text.toLowerCase().indexOf(q);
@@ -944,6 +959,21 @@ async function renderGlobalSearch(val) {
 
   if (results.length === 0) {
     resultsEl.innerHTML = `<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="margin-top:10px;color:var(--text3)">API'de aranıyor...</div></div>`;
+    
+    // Check API cache first
+    if (globalSearchApiCache[norm]) {
+      const apiData = globalSearchApiCache[norm];
+      resultsEl.innerHTML = `
+        <div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:4px">🌐 API cache</div>
+        <div class="search-result-item" onclick="showDictWordDetail('${escQ(apiData.word)}')">
+          <div>
+            <div class="search-result-word">${highlight(apiData.word, norm)}</div>
+            <div class="search-result-meaning">${highlight(apiData.turkish || apiData.meanings?.[0]?.definitions?.[0] || '', norm)}</div>
+          </div>
+          <span class="search-result-badge" style="background:rgba(46,204,113,0.15);color:#2ecc71;border-color:rgba(46,204,113,0.3)">🌐 Sözlük</span>
+        </div>`;
+      return;
+    }
     
     // Search via API
     const apiData = await fetchDictData(norm);
@@ -967,6 +997,15 @@ async function renderGlobalSearch(val) {
 
   resultsEl.innerHTML = `<div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:4px">${results.length} sonuç bulundu</div>` +
     results.map(r => {
+      if (r.type === 'custom') {
+        return `<div class="search-result-item" onclick="showAddWord(${r.idx})">
+          <div>
+            <div class="search-result-word">${highlight(r.word[0], norm)}</div>
+            <div class="search-result-meaning">${highlight(r.word[1], norm)}</div>
+          </div>
+          <span class="search-result-badge" style="background:rgba(52,152,219,0.15);color:#3498db;border-color:rgba(52,152,219,0.3)">📝 Kişisel</span>
+        </div>`;
+      }
       if (r.type === 'general') {
         return `<div class="search-result-item" onclick="showGeneralWordDetail('${escQ(r.word[0])}')">
           <div>
