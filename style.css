@@ -126,178 +126,360 @@ body {
 
 /* ── Screen Transition Animations ── */
 @keyframes screenSlideInRight {
-    0% { 
-        opacity: 0; 
+    0% {
+        opacity: 0;
         transform: translateX(60px) scale(0.96);
         filter: blur(4px);
     }
-    100% { 
-        opacity: 1; 
+
+    100% {
+        opacity: 1;
         transform: translateX(0) scale(1);
         filter: blur(0);
     }
 }
 
 @keyframes screenSlideInLeft {
-    0% { 
-        opacity: 0; 
+    0% {
+        opacity: 0;
         transform: translateX(-60px) scale(0.96);
         filter: blur(4px);
     }
-    100% { 
-        opacity: 1; 
+
+    100% {
+        opacity: 1;
         transform: translateX(0) scale(1);
         filter: blur(0);
     }
 }
 
 @keyframes screenSlideOutLeft {
-    0% { 
-        opacity: 1; 
+    0% {
+        opacity: 1;
         transform: translateX(0) scale(1);
         filter: blur(0);
     }
-    100% { 
-        opacity: 0; 
+
+    100% {
+        opacity: 0;
         transform: translateX(-40px) scale(0.96);
         filter: blur(4px);
     }
 }
 
 @keyframes screenSlideOutRight {
-    0% { 
-        opacity: 1; 
+    0% {
+        opacity: 1;
         transform: translateX(0) scale(1);
         filter: blur(0);
     }
-    100% { 
-        opacity: 0; 
+
+    100% {
+        opacity: 0;
         transform: translateX(40px) scale(0.96);
         filter: blur(4px);
     }
 }
 
 @keyframes screenFadeIn {
-    0% { opacity: 0; transform: scale(0.98); }
-    100% { opacity: 1; transform: scale(1); }
+    0% {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 @keyframes screenFadeOut {
-    0% { opacity: 1; transform: scale(1); }
-    100% { opacity: 0; transform: scale(0.98); }
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(0.98);
+    }
 }
 
 /* ── Modal Animations ── */
 @keyframes modalSlideUp {
-    0% { transform: translateY(60px) scale(0.95); opacity: 0; }
-    100% { transform: translateY(0) scale(1); opacity: 1; }
+    0% {
+        transform: translateY(60px) scale(0.95);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
 }
 
 @keyframes modalSlideDown {
-    0% { transform: translateY(0) scale(1); opacity: 1; }
-    100% { transform: translateY(60px) scale(0.95); opacity: 0; }
+    0% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateY(60px) scale(0.95);
+        opacity: 0;
+    }
 }
 
 @keyframes modalScaleIn {
-    0% { transform: scale(0.85); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
+    0% {
+        transform: scale(0.85);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 @keyframes modalScaleOut {
-    0% { transform: scale(1); opacity: 1; }
-    100% { transform: scale(0.85); opacity: 0; }
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(0.85);
+        opacity: 0;
+    }
 }
 
 /* ── Element Stagger Animations ── */
 @keyframes fadeSlideUp {
-    0% { opacity: 0; transform: translateY(20px); }
-    100% { opacity: 1; transform: translateY(0); }
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 @keyframes fadeIn {
-    0% { opacity: 0; }
-    100% { opacity: 1; }
+    0% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+    }
 }
 
 @keyframes fadeOut {
-    0% { opacity: 1; }
-    100% { opacity: 0; }
+    0% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
 }
 
 @keyframes popIn {
-    0% { opacity: 0; transform: scale(0.9) translateY(10px); }
-    100% { opacity: 1; transform: scale(1) translateY(0); }
+    0% {
+        opacity: 0;
+        transform: scale(0.9) translateY(10px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }
 
 @keyframes popOut {
-    0% { opacity: 1; transform: scale(1); }
-    100% { opacity: 0; transform: scale(0.9); }
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(0.9);
+    }
 }
 
 @keyframes slideUp {
-    0% { transform: translateY(100%); }
-    100% { transform: translateY(0); }
+    0% {
+        transform: translateY(100%);
+    }
+
+    100% {
+        transform: translateY(0);
+    }
 }
 
 @keyframes slideDown {
-    0% { transform: translateY(0); }
-    100% { transform: translateY(100%); }
+    0% {
+        transform: translateY(0);
+    }
+
+    100% {
+        transform: translateY(100%);
+    }
 }
 
 @keyframes scaleIn {
-    0% { opacity: 0; transform: scale(0.85); }
-    100% { opacity: 1; transform: scale(1); }
+    0% {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
 }
 
 /* ── Bounce & Elastic Effects ── */
 @keyframes bounceIn {
-    0% { transform: scale(0.3); opacity: 0; }
-    50% { transform: scale(1.05); }
-    70% { transform: scale(0.95); }
-    100% { transform: scale(1); opacity: 1; }
+    0% {
+        transform: scale(0.3);
+        opacity: 0;
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    70% {
+        transform: scale(0.95);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 @keyframes bounceOut {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(0.95); }
-    100% { transform: scale(0.3); opacity: 0; }
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(0.95);
+    }
+
+    100% {
+        transform: scale(0.3);
+        opacity: 0;
+    }
 }
 
 @keyframes elasticIn {
-    0% { transform: scale(0.5); opacity: 0; }
-    60% { transform: scale(1.1); opacity: 1; }
-    80% { transform: scale(0.95); }
-    100% { transform: scale(1); }
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+
+    60% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+
+    80% {
+        transform: scale(0.95);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 /* ── Utility Animation Classes ── */
-.anim-fade-in { animation: fadeIn 0.35s var(--ease-out-expo) forwards; }
-.anim-fade-out { animation: fadeOut 0.25s ease forwards; }
-.anim-slide-up { animation: slideUp 0.5s var(--ease-out-expo) forwards; }
-.anim-pop-in { animation: popIn 0.4s var(--ease-spring) forwards; }
-.anim-scale-in { animation: scaleIn 0.35s var(--ease-out-expo) forwards; }
-.anim-bounce-in { animation: bounceIn 0.5s var(--ease-out-back) forwards; }
+.anim-fade-in {
+    animation: fadeIn 0.35s var(--ease-out-expo) forwards;
+}
+
+.anim-fade-out {
+    animation: fadeOut 0.25s ease forwards;
+}
+
+.anim-slide-up {
+    animation: slideUp 0.5s var(--ease-out-expo) forwards;
+}
+
+.anim-pop-in {
+    animation: popIn 0.4s var(--ease-spring) forwards;
+}
+
+.anim-scale-in {
+    animation: scaleIn 0.35s var(--ease-out-expo) forwards;
+}
+
+.anim-bounce-in {
+    animation: bounceIn 0.5s var(--ease-out-back) forwards;
+}
 
 /* ── Staggered Children Animation ── */
-.stagger-children > * {
+.stagger-children>* {
     opacity: 0;
     animation: fadeSlideUp 0.4s var(--ease-out-expo) forwards;
 }
-.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
-.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
-.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
-.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
-.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
-.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
-.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
-.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
-.stagger-children > *:nth-child(9) { animation-delay: 400ms; }
-.stagger-children > *:nth-child(10) { animation-delay: 450ms; }
+
+.stagger-children>*:nth-child(1) {
+    animation-delay: 0ms;
+}
+
+.stagger-children>*:nth-child(2) {
+    animation-delay: 50ms;
+}
+
+.stagger-children>*:nth-child(3) {
+    animation-delay: 100ms;
+}
+
+.stagger-children>*:nth-child(4) {
+    animation-delay: 150ms;
+}
+
+.stagger-children>*:nth-child(5) {
+    animation-delay: 200ms;
+}
+
+.stagger-children>*:nth-child(6) {
+    animation-delay: 250ms;
+}
+
+.stagger-children>*:nth-child(7) {
+    animation-delay: 300ms;
+}
+
+.stagger-children>*:nth-child(8) {
+    animation-delay: 350ms;
+}
+
+.stagger-children>*:nth-child(9) {
+    animation-delay: 400ms;
+}
+
+.stagger-children>*:nth-child(10) {
+    animation-delay: 450ms;
+}
 
 /* ── Page Load Header Animation ── */
 .header-logo {
@@ -332,7 +514,7 @@ body {
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
     transform: scale(0);
     opacity: 0;
     transition: transform 0.5s ease, opacity 0.3s ease;
@@ -346,8 +528,15 @@ body {
 
 /* ── Pulse Attention ── */
 @keyframes pulseAttention {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.08); }
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.08);
+    }
 }
 
 .pulse-attention {
@@ -356,8 +545,13 @@ body {
 
 /* ── Shimmer Loading ── */
 @keyframes shimmerEffect {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
 }
 
 .shimmer {
@@ -368,8 +562,15 @@ body {
 
 /* ── Floating Animation ── */
 @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-8px); }
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-8px);
+    }
 }
 
 .float {
@@ -378,8 +579,13 @@ body {
 
 /* ── Spin Animation ── */
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .spin {
@@ -900,13 +1106,27 @@ button:active {
 }
 
 @keyframes swipeLeft {
-    0% { transform: translateX(0) rotate(0); opacity: 1; }
-    100% { transform: translateX(-120vw) rotate(-18deg); opacity: 0; }
+    0% {
+        transform: translateX(0) rotate(0);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateX(-120vw) rotate(-18deg);
+        opacity: 0;
+    }
 }
 
 @keyframes swipeRight {
-    0% { transform: translateX(0) rotate(0); opacity: 1; }
-    100% { transform: translateX(120vw) rotate(18deg); opacity: 0; }
+    0% {
+        transform: translateX(0) rotate(0);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateX(120vw) rotate(18deg);
+        opacity: 0;
+    }
 }
 
 .flash-flip-btn {
@@ -961,8 +1181,15 @@ button:active {
 }
 
 @keyframes pulseGlow {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
 }
 
 .swipe-overlay-label {
@@ -1723,13 +1950,27 @@ button:active {
 }
 
 @keyframes modalOverlayIn {
-    0% { opacity: 0; backdrop-filter: blur(0); }
-    100% { opacity: 1; backdrop-filter: blur(8px); }
+    0% {
+        opacity: 0;
+        backdrop-filter: blur(0);
+    }
+
+    100% {
+        opacity: 1;
+        backdrop-filter: blur(8px);
+    }
 }
 
 @keyframes modalOverlayOut {
-    0% { opacity: 1; backdrop-filter: blur(8px); }
-    100% { opacity: 0; backdrop-filter: blur(0); }
+    0% {
+        opacity: 1;
+        backdrop-filter: blur(8px);
+    }
+
+    100% {
+        opacity: 0;
+        backdrop-filter: blur(0);
+    }
 }
 
 .stats-panel {
@@ -2133,11 +2374,29 @@ button:active {
 
 .search-results-wrap {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 12px 16px;
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+#home-search-content {
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+#home-search-content.active {
+    display: flex;
+}
+
+#home-search-content .search-results-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .search-result-item {
@@ -2861,8 +3120,13 @@ button:active {
 }
 
 @keyframes comboPulse {
-    0% { transform: scale(1); }
-    100% { transform: scale(1.05); }
+    0% {
+        transform: scale(1);
+    }
+
+    100% {
+        transform: scale(1.05);
+    }
 }
 
 /* ── XP Bubble Bonus ── */
@@ -2901,11 +3165,21 @@ button:active {
 }
 
 @keyframes toastPopIn {
-    0% { transform: translateX(-50%) translateY(40px) scale(0.8); opacity: 0; }
-    60% { transform: translateX(-50%) translateY(-5px) scale(1.02); }
-    100% { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+    0% {
+        transform: translateX(-50%) translateY(40px) scale(0.8);
+        opacity: 0;
+    }
+
+    60% {
+        transform: translateX(-50%) translateY(-5px) scale(1.02);
+    }
+
+    100% {
+        transform: translateX(-50%) translateY(0) scale(1);
+        opacity: 1;
+    }
 }
-}
+
 
 .achievement-toast .achievement-icon {
     font-size: 40px;
@@ -3380,9 +3654,17 @@ button:active {
 }
 
 @keyframes correctGlow {
-    0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
-    50% { box-shadow: 0 0 30px 10px rgba(46, 204, 113, 0.3); }
-    100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+    0% {
+        box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
+    }
+
+    50% {
+        box-shadow: 0 0 30px 10px rgba(46, 204, 113, 0.3);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
+    }
 }
 
 .flash-card.wrong-glow {
@@ -3390,9 +3672,17 @@ button:active {
 }
 
 @keyframes wrongGlow {
-    0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
-    50% { box-shadow: 0 0 30px 10px rgba(231, 76, 60, 0.3); }
-    100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+    0% {
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7);
+    }
+
+    50% {
+        box-shadow: 0 0 30px 10px rgba(231, 76, 60, 0.3);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
+    }
 }
 
 /* ── Responsive Adjustments ── */
@@ -3400,9 +3690,43 @@ button:active {
     .gm-achievements-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .quest-home-card {
         padding: 12px;
+    }
+
+    /* Flash card responsive */
+    .flash-wrap {
+        padding: 12px 14px;
+    }
+
+    .flash-card-wrap {
+        min-height: 200px;
+    }
+
+    .flash-word {
+        font-size: 24px !important;
+    }
+
+    .flash-meaning {
+        font-size: 17px !important;
+    }
+
+    .flash-flip-btn {
+        padding: 9px 18px;
+        font-size: 13px;
+    }
+
+    .swipe-btn {
+        padding: 11px 10px;
+        font-size: 13px;
+    }
+
+    /* Search letter nav */
+    #home-search-content button[onclick^="onLetterClick"] {
+        width: 28px;
+        height: 28px;
+        font-size: 11px;
     }
 }
 
@@ -4040,6 +4364,64 @@ button:active {
     .gm-xp-burst {
         font-size: 26px;
     }
+
+    /* Flash card responsive */
+    .flash-wrap {
+        padding: 10px 12px;
+    }
+
+    .flash-card-wrap {
+        min-height: 180px;
+    }
+
+    .flash-word {
+        font-size: 22px !important;
+    }
+
+    .flash-meaning {
+        font-size: 16px !important;
+    }
+
+    .flash-flip-btn {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+
+    .swipe-btn-row {
+        flex-wrap: wrap;
+    }
+
+    .swipe-btn {
+        flex: 1;
+        min-width: calc(50% - 6px);
+        padding: 10px 8px;
+        font-size: 13px;
+    }
+
+    /* Search responsive */
+    .global-search-input {
+        font-size: 14px;
+        padding: 10px 12px 10px 36px;
+    }
+
+    .search-result-item {
+        padding: 10px 12px;
+    }
+
+    .search-result-word {
+        font-size: 14px;
+    }
+
+    .search-result-meaning {
+        font-size: 12px;
+    }
+
+    /* Letter nav buttons smaller on very small screens */
+    #home-search-content button[onclick^="onLetterClick"] {
+        width: 26px !important;
+        height: 26px !important;
+        font-size: 10px !important;
+    }
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -4311,7 +4693,9 @@ button:active {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .general-stats {

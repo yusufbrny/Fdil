@@ -260,7 +260,11 @@ function startMyWordsFlash() {
   if (customVocab.length === 0) { showToast('Kelime yok!'); return; }
   currentCards = shuffle(getMyWordsAsCards());
   cardIndex = 0; known = []; unknown = [];
-  renderFlash('showMyWords()', '📝 Kişisel Kelimelerim', () => 'Kişisel');
+  _fcSwiping = false;
+  _flashBackFn = 'showMyWords()';
+  _flashTitle = '📝 Kişisel Kelimelerim';
+  _flashUnitTagFn = () => 'Kişisel';
+  renderFlash();
   showScreen('screen-flash');
 }
 
@@ -316,11 +320,13 @@ function filterUnits(type, el) {
 }
 
 function goHome() {
+  clearGlobalSearch();
   showScreen('screen-home', 'back');
   renderHome();
 }
 
 function openUnit(u) {
+  if (!u || !UNITS[u]) { goHome(); return; }
   currentUnit = u;
   showScreen('screen-unit', 'forward');
   document.getElementById('unit-screen-title').textContent = `Ünite ${u}`;
@@ -347,24 +353,60 @@ function esc(s) {
 // onclick attribute'larında kullanmak için (tek tırnakları kaçır)
 function escQ(s) { return esc(s || ''); }
 
+// ===== FLASH CARD STATE =====
+let _fcSwiping = false;
+let _flashBackFn = null;
+let _flashTitle = null;
+let _flashUnitTagFn = null;
+
 // ===== MODES =====
 // -- Flash Cards --
 function startFlash(words) {
-  currentCards = words || shuffle(UNITS[currentUnit].words);
-  cardIndex = 0; known = []; unknown = [];
+  if (!currentUnit && !words) { showToast('Önce bir ünite seç!'); return; }
+  const pool = words || (UNITS[currentUnit] ? shuffle(UNITS[currentUnit].words) : []);
+  if (pool.length === 0) { showToast('Bu ünitede kelime yok!'); return; }
+  currentCards = pool;
+  cardIndex = 0;
+  known = [];
+  unknown = [];
+  _fcSwiping = false;
+  _flashBackFn = null;
+  _flashTitle = null;
+  _flashUnitTagFn = null;
   renderFlash();
   showScreen('screen-flash');
 }
 
 function renderFlash(backFn, titleOverride, unitTagFn) {
+  if (backFn !== undefined) _flashBackFn = backFn;
+  if (titleOverride !== undefined) _flashTitle = titleOverride;
+  if (unitTagFn !== undefined) _flashUnitTagFn = unitTagFn;
+
   const s = document.getElementById('screen-flash');
-  if (cardIndex >= currentCards.length) { renderFlashResult(backFn); return; }
+  if (!s) return;
+
+  if (!currentCards || currentCards.length === 0 || cardIndex >= currentCards.length) {
+    renderFlashResult(_flashBackFn);
+    return;
+  }
+
   const word = currentCards[cardIndex];
+  if (!word || !word[0]) {
+    cardIndex++;
+    renderFlash();
+    return;
+  }
+
   const total = currentCards.length;
   const pct = Math.round((cardIndex / total) * 100);
-  const backHandler = backFn ? backFn : `openUnit(currentUnit)`;
-  const title = titleOverride || 'Flash Kartlar';
-  const unitInfo = unitTagFn ? unitTagFn(word) : `Ünite ${currentUnit}`;
+  const backHandler = _flashBackFn || `openUnit(currentUnit || 1)`;
+  const title = _flashTitle || 'Flash Kartlar';
+  const unitInfo = _flashUnitTagFn ? _flashUnitTagFn(word) : `Ünite ${word._unit || currentUnit || 1}`;
+
+  let metaFront = '', metaBack = '';
+  try { metaFront = renderWordMetaChips(word[0]); } catch(e) {}
+  try { metaBack = renderWordMetaChips(word[0], true); } catch(e) {}
+
   s.innerHTML = `
   <div class="unit-header">
     <button class="back-btn" onclick="${backHandler}">←</button>
@@ -376,7 +418,7 @@ function renderFlash(backFn, titleOverride, unitTagFn) {
       <span class="flash-counter-badge">${cardIndex + 1}/${total}</span>
     </div>
     <div class="flash-card-wrap">
-      <div class="flash-card" id="fc" onclick="handleFlashTap(event)">
+      <div class="flash-card" id="fc" onclick="flipCard()">
         <div class="swipe-overlay left" id="fc-overlay-left">
           <div class="swipe-overlay-icon">✗</div>
           <div class="swipe-overlay-label">Bilmedim</div>
@@ -393,32 +435,37 @@ function renderFlash(backFn, titleOverride, unitTagFn) {
             <div class="flash-word">${esc(word[0])}</div>
             <button class="pronounce-btn" onclick="event.stopPropagation();speakWord('${escQ(word[0])}')" title="Telaffuz dinle">🔊</button>
           </div>
-          ${renderWordMetaChips(word[0])}
-          <div class="flash-hint-bottom">ortaya dokun — kartı çevir</div>
+          ${metaFront}
+          <div class="flash-hint-bottom">kartı çevir butonuna bas veya kartı tıkla</div>
         </div>
         <div class="flash-face flash-back">
           <div class="flash-hint" style="color:rgba(255,255,255,0.7)">Türkçe</div>
           <div class="flash-meaning">${esc(word[1])}</div>
           ${word[2] ? `<div class="flash-example">"${esc(word[2])}"</div>` : ''}
-          ${renderWordMetaChips(word[0], true)}
+          ${metaBack}
         </div>
       </div>
     </div>
-    <button class="flash-flip-btn" onclick="event.stopPropagation();flipCard();flashTouchHandled=true;">🔄 Kartı Çevir</button>
+    <button class="flash-flip-btn" onclick="event.stopPropagation();flipCard();">🔄 Kartı Çevir</button>
     <div class="flash-swipe-guide">
       <div class="flash-guide-item"><div class="flash-guide-dot" style="background:var(--error)"></div><span style="color:var(--error)">← Bilmedim</span></div>
       <span style="font-size:10px;color:var(--text3)">sürükle veya bas</span>
       <div class="flash-guide-item"><span style="color:var(--success)">Bildim →</span><div class="flash-guide-dot" style="background:var(--success)"></div></div>
     </div>
     <div class="swipe-btn-row">
-      <button class="swipe-btn wrong" id="btn-wrong" onclick="swipeCard('left')">✗ Bilmedim</button>
-      <button class="swipe-btn right" id="btn-right" onclick="swipeCard('right')">✓ Bildim</button>
+      <button class="swipe-btn wrong" id="btn-wrong" onclick="event.stopPropagation();swipeCard('left')">✗ Bilmedim</button>
+      <button class="swipe-btn right" id="btn-right" onclick="event.stopPropagation();swipeCard('right')">✓ Bildim</button>
     </div>
   </div>`;
   initFlashDrag();
+  showScreen('screen-flash');
 }
 
-function flipCard() { const fc = document.getElementById('fc'); if (fc) fc.classList.toggle('flipped'); }
+function flipCard() {
+  if (_fcSwiping) return;
+  const fc = document.getElementById('fc');
+  if (fc && !fc.classList.contains('dragging')) fc.classList.toggle('flipped');
+}
 
 function handleFlashTap(e) {
   if (e.target.closest('.swipe-btn') || e.target.closest('button')) return;
@@ -463,29 +510,46 @@ function initFlashDrag() {
 
   let startX = 0, startY = 0, curX = 0;
   let isDragging = false;
-  let intentLocked = false;   // 'horizontal' | 'vertical' | false
-  let dragActive = false;     // gerçekten yatay sürükleme başladı mı
+  let intentLocked = false;
+  let dragActive = false;
   const SWIPE_THRESHOLD = 80;
-  // TAP_MAX: bu kadar hareket varsa flip tetiklenmez — 12px titreme payı
-  const TAP_MAX = 12;
-  const DRAG_START_MIN = 14;  // bu kadarı geçince yatay drag say
+  const DRAG_START_MIN = 10;
+
+  function resetOverlays() {
+    const overlayL = document.getElementById('fc-overlay-left');
+    const overlayR = document.getElementById('fc-overlay-right');
+    const btnW = document.getElementById('btn-wrong');
+    const btnR = document.getElementById('btn-right');
+    if (overlayL) overlayL.style.opacity = 0;
+    if (overlayR) overlayR.style.opacity = 0;
+    if (btnW) btnW.classList.remove('drag-hint-left', 'drag-hint-right');
+    if (btnR) btnR.classList.remove('drag-hint-left', 'drag-hint-right');
+  }
+
+  function snapBack() {
+    const isFlipped = fc.classList.contains('flipped');
+    fc.classList.remove('dragging');
+    fc.style.transition = 'transform 0.35s cubic-bezier(0.2,0.8,0.2,1)';
+    fc.style.transform = isFlipped ? 'rotateY(180deg)' : '';
+    setTimeout(() => { if (fc) fc.style.transition = ''; }, 350);
+    resetOverlays();
+  }
 
   function onStart(x, y) {
+    if (_fcSwiping) return;
     startX = x; startY = y; curX = x;
     isDragging = true; intentLocked = false; dragActive = false;
-    flashTouchHandled = false;
   }
 
   function onMove(x, y) {
-    if (!isDragging) return;
+    if (!isDragging || _fcSwiping) return;
     const dx = x - startX;
     const dy = y - startY;
 
-    // Henüz niyet belirlenmemişse belirle
     if (!intentLocked) {
       const adx = Math.abs(dx), ady = Math.abs(dy);
-      if (adx < 4 && ady < 4) return; // çok küçük hareket, bekle
-      if (ady > adx) { intentLocked = 'vertical'; isDragging = false; return; }
+      if (adx < 5 && ady < 5) return;
+      if (ady > adx * 1.2) { intentLocked = 'vertical'; isDragging = false; return; }
       intentLocked = 'horizontal';
     }
     if (intentLocked !== 'horizontal') return;
@@ -494,71 +558,50 @@ function initFlashDrag() {
     if (!dragActive) return;
     curX = x;
 
-    // Kart eğimi: max ±18°, dx ile orantılı
     const rot = Math.min(18, Math.max(-18, dx / 12));
-    // 3D flip durumu koru
     const isFlipped = fc.classList.contains('flipped');
     fc.classList.add('dragging');
+    fc.style.transition = 'none';
     fc.style.transform = `translateX(${dx}px) rotate(${rot}deg)${isFlipped ? ' rotateY(180deg)' : ''}`;
 
-    // Overlay opacity — eşiğe yaklaştıkça belirginleşir
     const progress = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD);
     const overlayL = document.getElementById('fc-overlay-left');
     const overlayR = document.getElementById('fc-overlay-right');
     const btnW = document.getElementById('btn-wrong');
     const btnR = document.getElementById('btn-right');
-
     if (dx < 0) {
       if (overlayL) overlayL.style.opacity = progress;
       if (overlayR) overlayR.style.opacity = 0;
-      if (btnW) { btnW.classList.add('drag-hint-left'); btnW.classList.remove('drag-hint-right'); }
+      if (btnW) btnW.classList.add('drag-hint-left');
       if (btnR) btnR.classList.remove('drag-hint-right');
-    } else if (dx > 0) {
+    } else {
       if (overlayR) overlayR.style.opacity = progress;
       if (overlayL) overlayL.style.opacity = 0;
-      if (btnR) { btnR.classList.add('drag-hint-right'); btnR.classList.remove('drag-hint-left'); }
+      if (btnR) btnR.classList.add('drag-hint-right');
       if (btnW) btnW.classList.remove('drag-hint-left');
-    } else {
-      if (overlayL) overlayL.style.opacity = 0;
-      if (overlayR) overlayR.style.opacity = 0;
-      if (btnW) btnW.classList.remove('drag-hint-left');
-      if (btnR) btnR.classList.remove('drag-hint-right');
     }
   }
 
   function onEnd() {
     if (!isDragging) return;
     isDragging = false;
+    if (!dragActive) { resetOverlays(); return; }
     const dx = curX - startX;
-    fc.classList.remove('dragging');
-
-    // Overlay ve buton hint temizle
-    const overlayL = document.getElementById('fc-overlay-left');
-    const overlayR = document.getElementById('fc-overlay-right');
-    const btnW = document.getElementById('btn-wrong');
-    const btnR = document.getElementById('btn-right');
-    if (overlayL) overlayL.style.opacity = 0;
-    if (overlayR) overlayR.style.opacity = 0;
-    if (btnW) btnW.classList.remove('drag-hint-left');
-    if (btnR) btnR.classList.remove('drag-hint-right');
-
-    // tap: toplam hareket TAP_MAX'tan az ise flip yap
-    if (!dragActive && Math.abs(curX - startX) < TAP_MAX) { flipCard(); flashTouchHandled = true; return; }
-
+    dragActive = false;
     if (dx < -SWIPE_THRESHOLD) {
       swipeCard('left');
     } else if (dx > SWIPE_THRESHOLD) {
       swipeCard('right');
     } else {
-      // Eşiğe ulaşmadı — kartı geri yerine snap et
-      const isFlipped = fc.classList.contains('flipped');
-      fc.style.transition = 'transform 0.4s cubic-bezier(0.2,0.8,0.2,1)';
-      fc.style.transform = isFlipped ? 'rotateY(180deg)' : '';
-      setTimeout(() => { if (fc) fc.style.transition = ''; }, 400);
+      snapBack();
     }
   }
 
-  // Touch events
+  function onCancel() {
+    isDragging = false; dragActive = false; intentLocked = false;
+    snapBack();
+  }
+
   fc.addEventListener('touchstart', e => {
     const t = e.touches[0];
     onStart(t.clientX, t.clientY);
@@ -567,90 +610,115 @@ function initFlashDrag() {
   fc.addEventListener('touchmove', e => {
     const t = e.touches[0];
     onMove(t.clientX, t.clientY);
-    // Gerçek yatay sürükleme başladıysa scroll'u engelle
     if (dragActive) e.preventDefault();
   }, { passive: false });
 
-  fc.addEventListener('touchend', () => onEnd());
-  fc.addEventListener('touchcancel', () => {
-    // İptal: state sıfırla, flip tetikleme
-    if (!isDragging) return;
-    isDragging = false; dragActive = false; intentLocked = false; flashTouchHandled = false;
-    fc.classList.remove('dragging');
-    ['fc-overlay-left', 'fc-overlay-right'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.style.opacity = 0;
-    });
-    ['btn-wrong', 'btn-right'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.classList.remove('drag-hint-left', 'drag-hint-right');
-    });
-    const isFlipped = fc.classList.contains('flipped');
-    fc.style.transition = 'transform 0.4s cubic-bezier(0.2,0.8,0.2,1)';
-    fc.style.transform = isFlipped ? 'rotateY(180deg)' : '';
-    setTimeout(() => { if (fc) fc.style.transition = ''; }, 400);
-  });
+  fc.addEventListener('touchend', e => {
+    if (dragActive) e.preventDefault();
+    onEnd();
+  }, { passive: false });
 
-  // Mouse events (masaüstü için)
+  fc.addEventListener('touchcancel', onCancel);
+
   fc.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
     onStart(e.clientX, e.clientY);
     const moveHandler = ev => onMove(ev.clientX, ev.clientY);
     const upHandler = () => {
-      onEnd();
       document.removeEventListener('mousemove', moveHandler);
       document.removeEventListener('mouseup', upHandler);
+      if (dragActive) {
+        onEnd();
+      } else {
+        isDragging = false; dragActive = false;
+        flipCard();
+      }
     };
     document.addEventListener('mousemove', moveHandler);
     document.addEventListener('mouseup', upHandler);
+    e.preventDefault();
   });
 }
 
 function swipeCard(dir) {
-  const fc = document.getElementById('fc');
-  const word = currentCards[cardIndex];
-  const unit = word._unit || currentUnit;
-  
-  if (dir === 'right') {
-    known.push(word);
-    markLearned(unit, word[0]);
-    delete errorBox['u' + unit + '_' + word[0]];
-    saveErrors();
-  } else {
-    unknown.push(word);
-    markUnlearned(unit, word[0]);
-    errorBox['u' + unit + '_' + word[0]] = { word: word[0], meaning: word[1], unit };
-    saveErrors();
+  if (_fcSwiping) return;
+  _fcSwiping = true;
+
+  const btnR = document.getElementById('btn-right');
+  const btnW = document.getElementById('btn-wrong');
+  if (btnR) btnR.disabled = true;
+  if (btnW) btnW.disabled = true;
+
+  if (!currentCards || currentCards.length === 0) {
+    _fcSwiping = false;
+    renderFlashResult();
+    return;
   }
-  
+
+  const word = currentCards[cardIndex];
+  if (!word || !word[0]) {
+    _fcSwiping = false;
+    cardIndex++;
+    renderFlash();
+    return;
+  }
+
+  const unit = word._unit || currentUnit || 1;
+
+  try {
+    if (dir === 'right') {
+      known.push(word);
+      markLearned(unit, word[0]);
+      delete errorBox['u' + unit + '_' + word[0]];
+      saveErrors();
+    } else {
+      unknown.push(word);
+      markUnlearned(unit, word[0]);
+      errorBox['u' + unit + '_' + word[0]] = { word: word[0], meaning: word[1], unit };
+      saveErrors();
+    }
+  } catch(e) {}
+
+  const fc = document.getElementById('fc');
   if (fc) {
     const isFlipped = fc.classList.contains('flipped');
     fc.classList.remove('dragging');
-    fc.style.transition = 'transform 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.25s ease';
+    fc.style.transition = 'transform 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease';
     const baseFlip = isFlipped ? ' rotateY(180deg)' : '';
     fc.style.transform = dir === 'right'
-      ? `translateX(120vw) rotate(25deg)${baseFlip}`
-      : `translateX(-120vw) rotate(-25deg)${baseFlip}`;
+      ? `translateX(120vw) rotate(22deg)${baseFlip}`
+      : `translateX(-120vw) rotate(-22deg)${baseFlip}`;
     fc.style.opacity = '0';
   }
-  
+
   setTimeout(() => {
+    _fcSwiping = false;
     cardIndex++;
-    if (word._fromErrors) {
-      if (cardIndex >= currentCards.length) renderFlashResult('showErrorBox()');
-      else renderFlash('showErrorBox()', 'Hata Kumbarası', w => `Ünite ${w._unit}`);
+    try {
+      if (cardIndex >= currentCards.length) {
+        renderFlashResult();
+      } else {
+        renderFlash();
+      }
+    } catch(e) {
+      _fcSwiping = false;
+      renderFlash();
     }
-    else if (word._fromMix) renderMixFlash();
-    else renderFlash();
-  }, 260);
+  }, 320);
 }
 
 function renderFlashResult(backFn) {
   const s = document.getElementById('screen-flash');
-  const backHandler = backFn || `openUnit(${currentUnit})`;
+  if (!s) return;
+  
+  const total = known.length + unknown.length;
+  const backHandler = backFn || _flashBackFn || (currentUnit ? `openUnit(${currentUnit})` : 'goHome()');
+  
   s.innerHTML = `
   <div class="result-wrap">
     <div class="result-emoji">${unknown.length === 0 ? '🏆' : known.length > unknown.length ? '💪' : '📚'}</div>
     <div class="result-title">${unknown.length === 0 ? 'Mükemmel!' : 'Sonuçlar'}</div>
-    <div class="result-sub">${known.length + unknown.length} kelimeden ${known.length} tanesini bildiniz</div>
+    <div class="result-sub">${total} kelimeden ${known.length} tanesini bildiniz</div>
     <div class="stat-row">
       <div class="stat-box"><div class="stat-num" style="color:var(--success)">${known.length}</div><div class="stat-lbl">Bildim ✓</div></div>
       <div class="stat-box"><div class="stat-num" style="color:var(--error)">${unknown.length}</div><div class="stat-lbl">Bilmedim ✗</div></div>
@@ -898,136 +966,304 @@ function checkSynQuiz(btn, chosen, correct) {
 }
 
 // ===== GLOBAL SEARCH =====
-let globalSearchTimer = null;
-let globalSearchApiCache = JSON.parse(localStorage.getItem('ydt_global_search_cache') || '{}');
+let _gsTimer = null;
+let _gsApiCache = JSON.parse(localStorage.getItem('ydt_gs_api_cache') || '{}');
+const LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+const GS_PAGE = 30;
 
 function onGlobalSearch(val) {
-  clearTimeout(globalSearchTimer);
-  globalSearchTimer = setTimeout(() => renderGlobalSearch(val), 200);
+  const clearBtn = document.getElementById('global-search-clear');
+  if (clearBtn) clearBtn.style.display = val ? 'flex' : 'none';
+  clearTimeout(_gsTimer);
+  _gsTimer = setTimeout(() => gsDoSearch(val.trim()), 250);
 }
 
-async function renderGlobalSearch(val) {
-  const norm = val.trim().toLowerCase();
+function clearGlobalSearch() {
+  const inp = document.getElementById('global-search');
+  if (inp) inp.value = '';
+  const clearBtn = document.getElementById('global-search-clear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  const normalContent = document.getElementById('home-normal-content');
+  const searchContent = document.getElementById('home-search-content');
+  if (normalContent) normalContent.style.display = '';
+  if (searchContent) searchContent.style.display = 'none';
+}
+
+function onLetterClick(letter) {
+  const inp = document.getElementById('global-search');
+  if (inp) inp.value = letter;
+  gsDoSearch(letter);
+}
+
+function gsDoSearch(query) {
   const normalContent = document.getElementById('home-normal-content');
   const searchContent = document.getElementById('home-search-content');
   const resultsEl = document.getElementById('search-results');
-
-  if (!norm) {
-    normalContent.style.display = '';
-    searchContent.style.display = 'none';
+  
+  if (!resultsEl) return;
+  
+  if (!query) {
+    if (normalContent) normalContent.style.display = '';
+    if (searchContent) searchContent.style.display = 'none';
     return;
   }
-  normalContent.style.display = 'none';
-  searchContent.style.display = 'flex';
-
+  
+  if (normalContent) normalContent.style.display = 'none';
+  if (searchContent) searchContent.style.display = 'flex';
+  
+  // Build letter nav
+  const letterNav = LETTERS.map(l => {
+    const active = query.toUpperCase() === l ? 'background:var(--accent);color:white' : 'background:var(--card);color:var(--text)';
+    return `<button onclick="onLetterClick('${l}')" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border2);font-size:11px;font-weight:700;cursor:pointer;${active}">${l}</button>`;
+  }).join('');
+  
+  const headerHtml = `<div style="padding:8px 16px;border-bottom:1px solid var(--border)">
+    <div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-bottom:8px">${letterNav}</div>
+  </div>`;
+  
+  resultsEl.innerHTML = headerHtml + `<div style="text-align:center;padding:30px"><div class="spinner"></div></div>`;
+  resultsEl.scrollTop = 0;
+  
+  // Gather results
+  const q = query.toLowerCase();
   const results = [];
   
-  // Search in YDT units
+  // YDT units
   for (let u = 1; u <= 10; u++) {
     UNITS[u].words.forEach(w => {
-      if (w[0].toLowerCase().includes(norm) || w[1].toLowerCase().includes(norm)) {
-        results.push({ word: w, unit: u, type: 'ydt', score: w[0].toLowerCase().startsWith(norm) ? 0 : 1 });
+      if (w[0].toLowerCase().includes(q) || w[1].toLowerCase().includes(q)) {
+        results.push({ word: w, unit: u, type: 'ydt' });
       }
     });
   }
   
-  // Search in custom vocabulary
+  // Custom vocab
   customVocab.forEach((entry, idx) => {
-    if (entry.word.toLowerCase().includes(norm) || entry.meanings.some(m => m.toLowerCase().includes(norm))) {
-      results.push({ word: [entry.word, entry.meanings.join(' / '), entry.example || ''], unit: '📝', type: 'custom', idx, score: 2 });
+    if (entry.word.toLowerCase().includes(q) || entry.meanings.some(m => m.toLowerCase().includes(q))) {
+      results.push({ word: [entry.word, entry.meanings.join(' / '), entry.example || ''], unit: '📝', type: 'custom', idx });
     }
   });
   
-  // Search in General English words cache
-  const generalKeys = Object.keys(generalCache);
-  generalKeys.forEach(w => {
-    const data = generalCache[w];
-    const def = data.definitions?.[0] || '';
-    if (w.toLowerCase().includes(norm) || def.toLowerCase().includes(norm)) {
-      results.push({ word: [w, def, ''], unit: '🌐', type: 'general', data, score: 3 });
+  // General cache
+  Object.keys(generalCache).forEach(w => {
+    if (w.toLowerCase().includes(q) || (generalCache[w].definitions && generalCache[w].definitions[0] && generalCache[w].definitions[0].toLowerCase().includes(q))) {
+      results.push({ word: [w, generalCache[w].definitions?.[0] || '', ''], unit: '🌐', type: 'general' });
     }
   });
-
-  // Sort: exact matches first, then starts-with, then contains
-  results.sort((a, b) => a.score - b.score);
-
-  function highlight(text, q) {
-    const idx = text.toLowerCase().indexOf(q);
-    if (idx === -1) return esc(text);
-    return esc(text.slice(0, idx)) + '<mark>' + esc(text.slice(idx, idx + q.length)) + '</mark>' + esc(text.slice(idx + q.length));
-  }
-
+  
   if (results.length === 0) {
-    resultsEl.innerHTML = `<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="margin-top:10px;color:var(--text3)">API'de aranıyor...</div></div>`;
-    
-    // Check API cache first
-    if (globalSearchApiCache[norm]) {
-      const apiData = globalSearchApiCache[norm];
-      resultsEl.innerHTML = `
-        <div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:4px">🌐 API cache</div>
-        <div class="search-result-item" onclick="showDictWordDetail('${escQ(apiData.word)}')">
-          <div>
-            <div class="search-result-word">${highlight(apiData.word, norm)}</div>
-            <div class="search-result-meaning">${highlight(apiData.turkish || apiData.meanings?.[0]?.definitions?.[0] || '', norm)}</div>
-          </div>
-          <span class="search-result-badge" style="background:rgba(46,204,113,0.15);color:#2ecc71;border-color:rgba(46,204,113,0.3)">🌐 Sözlük</span>
-        </div>`;
-      return;
-    }
-    
-    // Search via API
-    const apiData = await fetchDictData(norm);
-    if (apiData) {
-      globalSearchApiCache[norm] = apiData;
-      localStorage.setItem('ydt_global_search_cache', JSON.stringify(globalSearchApiCache));
-      resultsEl.innerHTML = `
-        <div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:4px">🌐 API sonucu</div>
-        <div class="search-result-item" onclick="showDictWordDetail('${escQ(apiData.word)}')">
-          <div>
-            <div class="search-result-word">${highlight(apiData.word, norm)}</div>
-            <div class="search-result-meaning">${highlight(apiData.turkish || apiData.meanings?.[0]?.definitions?.[0] || '', norm)}</div>
-          </div>
-          <span class="search-result-badge" style="background:rgba(46,204,113,0.15);color:#2ecc71;border-color:rgba(46,204,113,0.3)">🌐 Sözlük</span>
-        </div>`;
+    // Try API
+    if (_gsApiCache[q]) {
+      const similarWords = gsFindSimilar(q);
+      resultsEl.innerHTML = headerHtml + gsBuildApiHtml(_gsApiCache[q], query) + gsBuildSimilarHtml(similarWords, q);
     } else {
-      resultsEl.innerHTML = `<div class="search-empty"><div class="search-empty-icon">🔍</div><div style="font-size:16px;font-weight:700;color:var(--text)">Sonuç bulunamadı</div><div style="font-size:13px;margin-top:6px">"${esc(val)}" için eşleşme yok</div></div>`;
+      resultsEl.innerHTML = headerHtml + `<div class="search-empty"><div class="search-empty-icon">🔍</div><div style="font-size:15px;font-weight:700">Sonuç bulunamadı</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Sözlük API kontrol ediliyor...</div></div>`;
+      fetchDictData(q).then(apiData => {
+        if (apiData) {
+          _gsApiCache[q] = apiData;
+          localStorage.setItem('ydt_gs_api_cache', JSON.stringify(_gsApiCache));
+          if (document.getElementById('search-results')) {
+            const similarWords = gsFindSimilar(q);
+            resultsEl.innerHTML = headerHtml + gsBuildApiHtml(apiData, query) + gsBuildSimilarHtml(similarWords, q);
+          }
+        } else {
+          if (document.getElementById('search-results')) {
+            const similarWords = gsFindSimilar(q);
+            resultsEl.innerHTML = headerHtml + gsBuildSimilarHtml(similarWords, q) + `<div class="search-empty"><div class="search-empty-icon">🔍</div><div style="font-size:15px;font-weight:700">Sonuç bulunamadı</div><div style="font-size:12px;color:var(--text3);margin-top:4px">"${esc(query)}" için sonuç yok</div></div>`;
+          }
+        }
+      });
     }
     return;
   }
-
-  resultsEl.innerHTML = `<div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:4px">${results.length} sonuç bulundu</div>` +
-    results.map(r => {
-      if (r.type === 'custom') {
-        return `<div class="search-result-item" onclick="showAddWord(${r.idx})">
-          <div>
-            <div class="search-result-word">${highlight(r.word[0], norm)}</div>
-            <div class="search-result-meaning">${highlight(r.word[1], norm)}</div>
-          </div>
-          <span class="search-result-badge" style="background:rgba(52,152,219,0.15);color:#3498db;border-color:rgba(52,152,219,0.3)">📝 Kişisel</span>
-        </div>`;
-      }
-      if (r.type === 'general') {
-        return `<div class="search-result-item" onclick="showGeneralWordDetail('${escQ(r.word[0])}')">
-          <div>
-            <div class="search-result-word">${highlight(r.word[0], norm)}</div>
-            <div class="search-result-meaning">${highlight(r.word[1], norm)}</div>
-          </div>
-          <span class="search-result-badge" style="background:rgba(155,89,182,0.15);color:#9b59b6;border-color:rgba(155,89,182,0.3)">🌐 Genel</span>
-        </div>`;
-      }
-      return `<div class="search-result-item" onclick="openWordModal('${escQ(r.word[0])}')">
-        <div>
-          <div class="search-result-word">${highlight(r.word[0], norm)}</div>
-          <div class="search-result-meaning">${highlight(r.word[1], norm)}</div>
-        </div>
+  
+  // Build results HTML
+  const hl = (text, qq) => {
+    if (!text) return '';
+    const idx = text.toLowerCase().indexOf(qq.toLowerCase());
+    if (idx === -1) return esc(text);
+    return esc(text.slice(0, idx)) + '<mark>' + esc(text.slice(idx, idx + qq.length)) + '</mark>' + esc(text.slice(idx + qq.length));
+  };
+  
+  let html = headerHtml;
+  html += `<div style="font-size:11px;color:var(--text3);font-weight:600;padding:6px 16px">${results.length} sonuç</div>`;
+  html += `<div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:8px">`;
+  
+  results.slice(0, GS_PAGE).forEach(r => {
+    if (r.type === 'custom') {
+      html += `<div class="search-result-item" onclick="showAddWord(${r.idx})">
+        <div><div class="search-result-word">${hl(r.word[0], query)}</div>
+        <div class="search-result-meaning">${hl(r.word[1], query)}</div></div>
+        <span class="search-result-badge" style="background:rgba(52,152,219,0.15);color:#3498db">📝</span>
+      </div>`;
+    } else if (r.type === 'general') {
+      html += `<div class="search-result-item" onclick="openDictWord('${escQ(r.word[0])}')">
+        <div><div class="search-result-word">${hl(r.word[0], query)}</div>
+        <div class="search-result-meaning">${hl(r.word[1], query)}</div></div>
+        <span class="search-result-badge" style="background:rgba(155,89,182,0.15);color:#9b59b6">🌐</span>
+      </div>`;
+    } else {
+      html += `<div class="search-result-item" onclick="openWordModal('${escQ(r.word[0])}')">
+        <div><div class="search-result-word">${hl(r.word[0], query)}</div>
+        <div class="search-result-meaning">${hl(r.word[1], query)}</div></div>
         <span class="search-result-badge">Ünite ${r.unit}</span>
       </div>`;
-    }).join('');
+    }
+  });
+  
+  html += `</div>`;
+  
+  if (results.length > GS_PAGE) {
+    html += `<div style="text-align:center;padding:10px;color:var(--text3);font-size:12px">+${results.length - GS_PAGE} sonuç daha — hepsini görmek için yazmaya devam et</div>`;
+  }
+  
+  resultsEl.innerHTML = html;
 }
 
-function showDictWordDetail(word) {
-  dictSearchWord(word);
+function gsBuildApiHtml(apiData, query) {
+  const hl = (text, qq) => {
+    if (!text) return '';
+    const idx = text.toLowerCase().indexOf(qq.toLowerCase());
+    if (idx === -1) return esc(text);
+    return esc(text.slice(0, idx)) + '<mark>' + esc(text.slice(idx, idx + qq.length)) + '</mark>' + esc(text.slice(idx + qq.length));
+  };
+  const def = apiData.meanings?.[0]?.definitions?.[0]?.text || apiData.turkish || '';
+  
+  // Related words from synonyms
+  const related = [];
+  if (apiData.meanings) {
+    apiData.meanings.forEach(m => {
+      if (m.synonyms) m.synonyms.slice(0, 4).forEach(s => { if (!related.includes(s)) related.push(s); });
+    });
+  }
+  const relatedHtml = related.length > 0 
+    ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">${related.map(r => `<span onclick="event.stopPropagation();openDictWord('${escQ(r)}')" style="background:rgba(46,204,113,0.1);color:#27ae60;padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid rgba(46,204,113,0.2)">${r}</span>`).join('')}</div>`
+    : '';
+  
+  return `<div style="padding:0 16px">
+    <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:8px">🌐 Sözlük</div>
+    <div class="search-result-item" onclick="openDictWord('${escQ(apiData.word)}')" style="border:2px solid var(--accent)">
+      <div><div class="search-result-word" style="font-size:18px">${hl(apiData.word, query)}</div>
+      <div class="search-result-meaning">${hl(def, query)}</div>${relatedHtml}</div>
+      <span class="search-result-badge" style="background:rgba(46,204,113,0.15);color:#2ecc71">🌐</span>
+    </div>
+  </div>`;
+}
+
+function gsFindSimilar(q) {
+  const similar = [];
+  const seen = new Set();
+  
+  // From API cache synonyms
+  if (_gsApiCache[q] && _gsApiCache[q].meanings) {
+    _gsApiCache[q].meanings.forEach(m => {
+      if (m.synonyms) {
+        m.synonyms.slice(0, 6).forEach(s => {
+          const sLower = s.toLowerCase();
+          if (!seen.has(sLower) && sLower !== q) {
+            seen.add(sLower);
+            similar.push({ word: s, source: 'synonym' });
+          }
+        });
+      }
+    });
+  }
+  
+  // From custom vocab
+  customVocab.forEach(entry => {
+    const w = entry.word.toLowerCase();
+    if (w !== q && !seen.has(w)) {
+      // Check if query is part of the word or vice versa
+      if (w.includes(q) || q.includes(w) || levenshtein(w, q) <= 2) {
+        seen.add(w);
+        similar.push({ word: entry.word, source: 'custom' });
+      }
+    }
+  });
+  
+  // From general cache
+  Object.keys(generalCache).forEach(w => {
+    if (w !== q && !seen.has(w)) {
+      if (w.includes(q) || q.includes(w) || levenshtein(w, q) <= 2) {
+        seen.add(w);
+        similar.push({ word: w, source: 'general' });
+      }
+    }
+  });
+  
+  // From YDT words
+  if (typeof words !== 'undefined') {
+    for (let u = 1; u <= 50; u++) {
+      const unit = words[u];
+      if (!unit) continue;
+      for (let i = 0; i < unit.length; i++) {
+        const w = (unit[i][0] || '').toLowerCase();
+        if (w && w !== q && !seen.has(w)) {
+          if (w.includes(q) || q.includes(w) || levenshtein(w, q) <= 2) {
+            seen.add(w);
+            similar.push({ word: unit[i][0], source: 'ydt' });
+          }
+        }
+      }
+      if (similar.length >= 15) break;
+    }
+  }
+  
+  return similar.slice(0, 15);
+}
+
+function gsBuildSimilarHtml(similar, q) {
+  if (!similar || similar.length === 0) return '';
+  
+  const groups = { synonym: [], custom: [], general: [], ydt: [] };
+  similar.forEach(s => {
+    if (groups[s.source]) groups[s.source].push(s.word);
+  });
+  
+  const icons = { synonym: '🔗', custom: '📝', general: '🌐', ydt: '📚' };
+  const colors = { synonym: '#27ae60', custom: '#3498db', general: '#9b59b6', ydt: '#e67e22' };
+  
+  let html = `<div style="padding:12px 16px 20px"><div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:10px">Benzer Kelimeler</div><div style="display:flex;flex-wrap:wrap;gap:6px">`;
+  
+  similar.slice(0, 12).forEach(s => {
+    html += `<span onclick="event.stopPropagation();openDictWord('${escQ(s.word)}')" style="background:rgba(${hexToRgb(colors[s.source])},0.1);color:${colors[s.source]};padding:6px 12px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(${hexToRgb(colors[s.source])},0.2)">${s.word}</span>`;
+  });
+  
+  html += `</div></div>`;
+  return html;
+}
+
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? `${parseInt(result[1], 16)},${parseInt(result[2], 16)},${parseInt(result[3], 16)}` : '0,0,0';
+}
+
+function levenshtein(a, b) {
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b[i - 1] === a[j - 1]) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(matrix[i - 1][j - 1], matrix[i][j - 1], matrix[i - 1][j]) + 1;
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+async function openDictWord(word) {
   showScreen('screen-dict');
+  if (!document.getElementById('dict-result')) renderDict();
+  await dictSearchWord(word);
+}
+
+function showDictWordInSearch(word) {
+  openDictWord(word);
 }
 
 // ===== WORD DETAIL MODAL =====
@@ -1152,7 +1388,13 @@ function showErrorBox() {
 function practiceErrors() {
   const errs = Object.values(errorBox); if (!errs.length) return;
   currentCards = shuffle(errs.map(e => { const w = [e.word, e.meaning, '']; w._unit = e.unit; w._fromErrors = true; return w; }));
-  cardIndex = 0; known = []; unknown = []; renderFlash('showErrorBox()', 'Hata Kumbarası - Flash', w => `Ünite ${w._unit}`); showScreen('screen-flash');
+  cardIndex = 0; known = []; unknown = [];
+  _fcSwiping = false;
+  _flashBackFn = 'showErrorBox()';
+  _flashTitle = 'Hata Kumbarası - Flash';
+  _flashUnitTagFn = w => `Ünite ${w._unit}`;
+  renderFlash();
+  showScreen('screen-flash');
 }
 function practiceErrorsMC() {
   const errs = Object.values(errorBox); if (errs.length < 4) { showToast('Test için en az 4 kelime olmalı!'); return; }
@@ -1914,7 +2156,7 @@ function openWordModal(wordStr) {
     const w = UNITS[u].words.find(w => w[0] === wordStr);
     if (w) { foundWord = w; foundUnit = u; break; }
   }
-  if (!foundWord) return;
+  if (!foundWord) { openDictWord(wordStr); return; }
 
   const meta = getWordMetaFull(wordStr);
   const isLearned = getLearnedSet(foundUnit).has(wordStr);
@@ -2285,7 +2527,11 @@ const QUEST_TEMPLATES = [
   { id: 'fib_5', icon: '✏️', name: 'Yazarlar', desc: '5 boşluk doldur doğru', xp: 30, check: (d) => (d.fibCorrect || 0) >= 5 },
 ];
 
-let _questData = JSON.parse(localStorage.getItem('ydt_quests_v1') || '{"date":"","active":[],"completed":[],"completedCount":0}');
+let _questData = (() => {
+  const d = JSON.parse(localStorage.getItem('ydt_quests_v1') || '{"date":"","active":[],"completed":[],"completedCount":0}');
+  if (d.stats && Array.isArray(d.stats.modesUsed)) d.stats.modesUsed = new Set(d.stats.modesUsed);
+  return d;
+})();
 
 function _todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -2318,7 +2564,10 @@ function _checkQuests() {
   _initDailyQuests();
   for (const quest of _questData.active) {
     if (_questData.completed.includes(quest.id)) continue;
-    if (quest.check(_questData.stats)) {
+    const template = QUEST_TEMPLATES.find(t => t.id === quest.id);
+    const checkFn = template ? template.check : quest.check;
+    if (typeof checkFn !== 'function') continue;
+    if (checkFn(_questData.stats)) {
       _questData.completed.push(quest.id);
       _questData.completedCount++;
       _xpData.xp += quest.xp;
@@ -2931,15 +3180,14 @@ window.markLearned = function (unit, word) {
 // -- swipeCard: flash kart doğru/yanlış --
 const _origSwipeCard = window.swipeCard;
 window.swipeCard = function (dir) {
-  const word = currentCards[cardIndex];
+  if (_fcSwiping) return;
   const btn = dir === 'right'
     ? document.getElementById('btn-right')
     : document.getElementById('btn-wrong');
-
   if (dir === 'right') {
     earnXP('flash_correct', btn);
   } else {
-    _shakeElement(document.getElementById('fc'));
+    try { _shakeElement(document.getElementById('fc')); } catch(e) {}
   }
   _origSwipeCard(dir);
 };
@@ -3797,7 +4045,6 @@ function renderSRFlash() {
   const isNew = word._srNew;
   const daysOverdue = isNew ? 0 : _srDaysDiff(card.due, _srToday());
 
-  // Interval etiketi
   const intervalLabel = isNew
     ? '<span class="sr-badge new-badge">✨ Yeni</span>'
     : daysOverdue > 0
@@ -3831,10 +4078,12 @@ function renderSRFlash() {
         <div class="flash-face flash-front">
           <span class="flash-unit-badge">Ünite ${word._unit}</span>
           ${intervalLabel}
-          <div class="flash-tap-icon">👆</div>
           <div class="flash-hint">İngilizce</div>
-          <div class="flash-word">${esc(word[0])}</div>
-          <div class="flash-hint-bottom">Ortaya dokun — kartı çevir</div>
+          <div class="flash-word-row">
+            <div class="flash-word">${esc(word[0])}</div>
+            <button class="pronounce-btn" onclick="event.stopPropagation();speakWord('${escQ(word[0])}')" title="Telaffuz dinle">🔊</button>
+          </div>
+          <div class="flash-hint-bottom">kartı çevir butonuna bas</div>
         </div>
         <div class="flash-face flash-back">
           <div class="flash-hint" style="color:rgba(255,255,255,0.7)">Türkçe</div>
@@ -3848,6 +4097,7 @@ function renderSRFlash() {
         </div>
       </div>
     </div>
+    <button class="flash-flip-btn" onclick="event.stopPropagation();flipCard();flashTouchHandled=true;">🔄 Kartı Çevir</button>
     <div class="flash-swipe-guide">
       <div class="flash-guide-item"><div class="flash-guide-dot" style="background:var(--error)"></div><span style="color:var(--error)">← Bilmedim</span></div>
       <span style="font-size:10px;color:var(--text3)">sürükle veya bas</span>
@@ -3864,23 +4114,37 @@ function renderSRFlash() {
 
 /* ── SR SWIPE ── */
 function srSwipe(quality) {
+  if (_fcSwiping) return;
+  _fcSwiping = true;
+  
   const fc = document.getElementById('fc');
-  if (!fc) return;
-
+  if (!fc) { _fcSwiping = false; return; }
+  
+  if (!currentCards || currentCards.length === 0 || cardIndex >= currentCards.length) {
+    _fcSwiping = false;
+    renderSRResult();
+    return;
+  }
+  
   const word = currentCards[cardIndex];
-  const wordKey = word._srWord || word[0];
-  const unit = word._unit || currentUnit;
+  if (!word || !word[0]) {
+    _fcSwiping = false;
+    cardIndex++;
+    renderSRFlash();
+    return;
+  }
 
-  // SM-2 güncelle
+  const wordKey = word._srWord || word[0];
+  const unit = word._unit || currentUnit || 1;
+
   let q;
   if (quality === 'easy') q = 5;
   else if (quality === 'good') q = 4;
   else if (quality === 'hard') q = 2;
-  else q = 1; // wrong
+  else q = 1;
 
   _sm2Update(wordKey, q);
 
-  // Görsel animasyon
   const isRight = q >= 3;
   fc.classList.remove('dragging');
   fc.style.transition = 'transform 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.38s ease';
@@ -3890,7 +4154,6 @@ function srSwipe(quality) {
     : `translateX(-110vw) rotate(-22deg)${baseFlip}`;
   fc.style.opacity = '0';
 
-  // Progress ve errorBox güncelle
   if (isRight) {
     known.push(word);
     markLearned(unit, word[0]);
@@ -3904,9 +4167,14 @@ function srSwipe(quality) {
   }
 
   setTimeout(() => {
+    _fcSwiping = false;
     cardIndex++;
-    renderSRFlash();
-  }, 380);
+    if (cardIndex >= currentCards.length) {
+      renderSRResult();
+    } else {
+      renderSRFlash();
+    }
+  }, 400);
 }
 
 /* ── SR SONUÇ ── */
@@ -4277,8 +4545,13 @@ let _spTimeout = null, _spInterval = null, _spStart = 0, _spAnswered = false;
 const CIRC = 2 * Math.PI * 18; // ~113.1
 
 function startSpeedMode() {
-  _spCards = shuffle(UNITS[currentUnit].words);
-  _spIdx = 0; _spScore = 0; _spTotal = _spCards.length;
+  if (!currentUnit || !UNITS[currentUnit]) { showToast('Önce bir ünite seç!'); return; }
+  const pool = shuffle(UNITS[currentUnit].words);
+  if (pool.length === 0) { showToast('Bu ünitede kelime yok!'); return; }
+  _spCards = pool;
+  _spIdx = 0;
+  _spScore = 0;
+  _spTotal = _spCards.length;
   _spAnswered = false;
   showScreen('screen-speed');
   _renderSpeedQ();
@@ -4321,9 +4594,19 @@ function _startTimerTick() {
 function _renderSpeedQ() {
   _clearSpeedTimer();
   const s = document.getElementById('screen-speed');
-  if (_spIdx >= _spCards.length) { _renderSpeedResult(); return; }
+  if (!s) return;
+  
+  if (!_spCards || _spCards.length === 0 || _spIdx >= _spCards.length) {
+    _renderSpeedResult();
+    return;
+  }
 
   const word = _spCards[_spIdx];
+  if (!word || !word[0]) {
+    _spIdx++;
+    _renderSpeedQ();
+    return;
+  }
   const unit = word._unit || currentUnit;
   const allWords = UNITS[unit] ? UNITS[unit].words : Object.values(UNITS).flatMap(u => u.words);
   const wrong = shuffle(allWords.filter(w => w[0] !== word[0])).slice(0, 3);
@@ -4376,13 +4659,20 @@ function _freezeTimer() {
 
 function checkSpeedQ(btn, chosen, correct, meaning) {
   if (_spAnswered) return;
+  if (!_spCards || _spIdx >= _spCards.length) return;
+  
   _spAnswered = true;
   _clearSpeedTimer();
   _freezeTimer();
   document.querySelectorAll('#speed-opts .mc-opt').forEach(b => b.classList.add('disabled'));
 
   const word = _spCards[_spIdx];
-  const unit = word._unit || currentUnit;
+  if (!word) {
+    _spIdx++;
+    _renderSpeedQ();
+    return;
+  }
+  const unit = word._unit || currentUnit || 1;
   const hintEl = document.getElementById('speed-xp-hint');
   const timeLeft = _timeLeftNow();
 
@@ -4426,10 +4716,17 @@ function checkSpeedQ(btn, chosen, correct, meaning) {
 
 function _timeoutSpeedQ() {
   if (_spAnswered) return;
+  if (!_spCards || _spIdx >= _spCards.length) return;
+  
   _spAnswered = true;
   _freezeTimer();
   const word = _spCards[_spIdx];
-  const unit = word._unit || currentUnit;
+  if (!word || !word[0]) {
+    _spIdx++;
+    _renderSpeedQ();
+    return;
+  }
+  const unit = word._unit || currentUnit || 1;
   document.querySelectorAll('#speed-opts .mc-opt').forEach(b => {
     b.classList.add('disabled');
     if (b.textContent.trim() === word[1]) b.classList.add('correct');
@@ -5144,6 +5441,17 @@ function openReading(id) {
     const s = document.getElementById('screen-reading');
     const isDone = readingLearnedWords[id];
     
+    const keywordsHtml = passage.keywords.map(w => {
+        const knownWord = readingLearnedWords[passage.id + '_' + w];
+        const style = knownWord 
+            ? 'background:rgba(46,204,113,0.15);border:1px solid rgba(46,204,113,0.4);border-radius:8px;padding:8px 10px;cursor:pointer;text-align:center;font-size:13px;font-weight:600;color:var(--success);display:flex;align-items:center;justify-content:space-between;gap:6px'
+            : 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;text-align:center;font-size:13px;font-weight:600;color:var(--accent);display:flex;align-items:center;justify-content:space-between;gap:6px';
+        return `<div class="reading-kw ${knownWord ? 'known' : ''}" data-word="${w}" data-passage-id="${passage.id}" style="${style}">
+            <span onclick="event.stopPropagation();showReadingWordPopup('${w}', this)">${w}</span>
+            <span style="font-size:11px;opacity:0.7">${knownWord ? '✓' : '👆'}</span>
+        </div>`;
+    }).join('');
+    
     s.innerHTML = `
         <div class="unit-header">
             <button class="back-btn" onclick="renderReadingHome()">←</button>
@@ -5155,23 +5463,92 @@ function openReading(id) {
                 ${isDone ? '✓ Tamamlandı' : '✓ Tamamla'}
             </button>
         </div>
-        <div style="flex:1;overflow-y:auto;padding:16px">
-            <div style="background:var(--card);border-radius:12px;padding:16px;margin-bottom:16px;border:1px solid var(--border)">
+        <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="background:var(--card);border-radius:12px;padding:16px;border:1px solid var(--border)">
                 <div style="font-size:15px;line-height:1.8;color:var(--text)">${passage.text}</div>
             </div>
-            <div style="background:rgba(46,204,113,0.1);border-radius:12px;padding:16px;margin-bottom:16px;border:1px solid rgba(46,204,113,0.3)">
+            <div style="background:rgba(46,204,113,0.1);border-radius:12px;padding:16px;border:1px solid rgba(46,204,113,0.3)">
                 <div style="font-size:12px;font-weight:700;color:var(--success);margin-bottom:6px">TÜRKÇE ÇEVIRI</div>
                 <div style="font-size:14px;line-height:1.8;color:var(--text)">${passage.turkish}</div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
-                ${passage.keywords.map(w => `<div onclick="dictSearchWord('${w}')" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;font-size:14px;font-weight:600;color:var(--accent)">${w}</div>`).join('')}
+            <div>
+                <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px">📚 KELİMELER (tıklayınca anlamı gör)</div>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+                    ${keywordsHtml}
+                </div>
             </div>
             <button onclick="startReadingFlash(${id})" style="width:100%;padding:14px;background:rgba(155,89,182,0.15);color:#9b59b6;border:1.5px solid rgba(155,89,182,0.3);border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">
                 🃏 Kelimeleri Flash Kartla Çalış
             </button>
-            <div style="margin-top:16px;font-size:12px;color:var(--text3);text-align:center">Kelimelere tıklayarak sözlükte ara</div>
+        </div>
+        <div id="reading-word-popup" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px">
+            <div id="reading-word-popup-card" style="background:var(--card);border-radius:20px;padding:24px;max-width:340px;width:100%;text-align:center"></div>
         </div>
     `;
+    
+    document.getElementById('reading-word-popup').addEventListener('click', function(e) {
+        if (e.target === this) hideReadingWordPopup();
+    });
+}
+
+async function showReadingWordPopup(word, el) {
+    const popup = document.getElementById('reading-word-popup');
+    const card = document.getElementById('reading-word-popup-card');
+    card.innerHTML = `<div style="font-size:36px;margin-bottom:8px">🔍</div><div class="spinner" style="margin:0 auto"></div><div style="color:var(--text3);margin-top:8px;font-size:13px">Aranıyor...</div>`;
+    popup.style.display = 'flex';
+    
+    const kwElement = el.closest('.reading-kw');
+    const passageId = kwElement?.dataset?.passageId;
+    
+    const data = await fetchDictData(word);
+    if (!data) {
+        card.innerHTML = `
+            <div style="font-size:36px;margin-bottom:8px">❌</div>
+            <div style="font-size:18px;font-weight:800;color:var(--text)">${word}</div>
+            <div style="color:var(--error);margin-top:8px">Anlam bulunamadı</div>
+            <button onclick="hideReadingWordPopup()" style="margin-top:16px;padding:10px 24px;background:var(--accent);color:white;border:none;border-radius:10px;font-weight:600;cursor:pointer">Kapat</button>
+        `;
+        return;
+    }
+    
+    const mainMeaning = data.meanings[0];
+    const firstDef = mainMeaning?.definitions?.[0];
+    const examples = mainMeaning?.examples?.slice(0, 1)[0];
+    
+    card.innerHTML = `
+        <div style="font-size:40px;font-weight:800;color:var(--accent);margin-bottom:4px">${data.word}</div>
+        ${data.phonetic ? `<div style="color:var(--text3);font-size:14px;font-style:italic;margin-bottom:12px">${data.phonetic}</div>` : ''}
+        ${data.turkish ? `<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:12px">${data.turkish}</div>` : ''}
+        ${firstDef ? `<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:12px;text-align:left">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:4px">📖 Tanım</div>
+            <div style="font-size:14px;color:var(--text);margin-bottom:6px">${firstDef.text}</div>
+            ${firstDef.turkish ? `<div style="font-size:13px;color:var(--text2)">→ ${firstDef.turkish}</div>` : ''}
+        </div>` : ''}
+        ${examples ? `<div style="background:rgba(98,129,65,0.1);border-radius:10px;padding:12px;margin-bottom:12px;text-align:left;border-left:3px solid var(--accent)">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:4px">💬 Örnek</div>
+            <div style="font-size:13px;color:var(--text);font-style:italic;margin-bottom:4px">"${examples.original}"</div>
+            ${examples.turkish ? `<div style="font-size:13px;color:var(--text2)">→ ${examples.turkish}</div>` : ''}
+        </div>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:12px">
+            ${data.audio ? `<button onclick="speakWord('${data.word}')" style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">🔊 Seslendir</button>` : ''}
+            <button onclick="dictSearchWord('${data.word}');hideReadingWordPopup()" style="padding:8px 16px;background:var(--card);color:var(--accent);border:1.5px solid var(--accent);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">📖 Sözlükte Ara</button>
+        </div>
+        <button onclick="hideReadingWordPopup()" style="padding:10px 24px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;font-weight:600;cursor:pointer">Kapat</button>
+    `;
+    
+    if (kwElement) {
+        const w = kwElement.dataset.word;
+        const pId = kwElement.dataset.passageId;
+        if (pId && w) {
+            readingLearnedWords[pId + '_' + w] = true;
+            _saveReadingWords();
+        }
+    }
+}
+
+function hideReadingWordPopup() {
+    const popup = document.getElementById('reading-word-popup');
+    if (popup) popup.style.display = 'none';
 }
 
 async function startReadingFlash(id) {
@@ -5292,6 +5669,8 @@ window.openReading = openReading;
 window.toggleReadingWord = toggleReadingWord;
 window.startReadingFlash = startReadingFlash;
 window.renderReadingFlash = renderReadingFlash;
+window.showReadingWordPopup = showReadingWordPopup;
+window.hideReadingWordPopup = hideReadingWordPopup;
 
 // ===== DICTIONARY =====
 let dictCache = JSON.parse(localStorage.getItem('ydt_dict_cache') || '{}');
@@ -5309,23 +5688,56 @@ async function fetchTurkishMeaning(word) {
     const cached = localStorage.getItem(cacheKey);
     if (cached) return cached;
     
+    // Try LibreTranslate public instances (CORS-friendly, tried in order)
+    const libreInstances = [
+        'https://translate.argosopentech.com/translate',
+        'https://translate.terraprint.co/translate',
+        'https://libretranslate.com/translate',
+    ];
+    for (const libreUrl of libreInstances) {
+        try {
+            const response = await fetch(libreUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ q: word, source: 'en', target: 'tr', format: 'text', api_key: '' })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data?.translatedText) {
+                    const result = data.translatedText.trim();
+                    if (result.toLowerCase() !== word.toLowerCase() && result.length > 1) {
+                        localStorage.setItem(cacheKey, result);
+                        return result;
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+    
+    // Try MyMemory with better parameters (preferring dictionary/technical context)
     try {
-        const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|tr`);
+        const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|tr&de=eng`);
         const data = await response.json();
         if (data.responseStatus === 200 && data.responseData?.translatedText) {
             const result = data.responseData.translatedText.trim();
-            localStorage.setItem(cacheKey, result);
-            return result;
+            // Validate - if translation is same as original or too short, try other source
+            if (result.toLowerCase() !== word.toLowerCase() && result.length > 2) {
+                localStorage.setItem(cacheKey, result);
+                return result;
+            }
         }
     } catch (e) {}
     
+    // Try Google Translate as final fallback
     try {
         const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q=${encodeURIComponent(word)}`);
         const data = await response.json();
         if (data && data[0] && data[0][0]) {
             const result = data[0][0][0].trim();
-            localStorage.setItem(cacheKey, result);
-            return result;
+            if (result.toLowerCase() !== word.toLowerCase() && result.length > 2) {
+                localStorage.setItem(cacheKey, result);
+                return result;
+            }
         }
     } catch (e) {}
     
@@ -5335,41 +5747,178 @@ async function fetchTurkishMeaning(word) {
 async function fetchDictData(word) {
     const w = word.toLowerCase().trim();
     if (dictCache[w] && dictCache[w].turkish) return dictCache[w];
+    
+    // Try primary API: dictionaryapi.dev
     try {
         const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);
-        if (!response.ok) return null;
-        const data = await response.json();
-        const entry = data[0];
-        const turkish = await fetchTurkishMeaning(w);
-        const result = {
-            word: w,
-            phonetic: entry.phonetic || entry.phonetics?.[0]?.text || '',
-            audio: entry.phonetics?.find(p => p.audio)?.audio || '',
-            turkish: turkish,
-            meanings: []
-        };
-        for (const meaning of entry.meanings || []) {
-            const syns = meaning.synonyms?.slice(0, 8) || [];
-            const ants = meaning.antonyms?.slice(0, 8) || [];
-            const defs = (meaning.definitions || []).slice(0, 3).map(d => d.definition);
-            result.meanings.push({
-                partOfSpeech: meaning.partOfSpeech || '',
-                definitions: defs,
-                synonyms: syns,
-                antonyms: ants,
-                example: meaning.definitions?.[0]?.example || ''
+        if (response.ok) {
+            const data = await response.json();
+            const entry = data[0];
+            if (entry && entry.meanings && entry.meanings.length > 0) {
+                const result = await buildDictResult(entry, w);
+                if (result && result.meanings.length > 0) {
+                    dictCache[w] = result;
+                    _saveDictCache();
+                    updateDictHistory(w);
+                    return result;
+                }
+            }
+        }
+    } catch (e) {}
+    
+    // Fallback: Try datamuse API for definitions
+    try {
+        const response = await fetch(`https://api.datamuse.com/words?sp=${w}&md=d&max=5`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.length > 0) {
+                const result = await buildDictResultFromDatamuse(data, w);
+                if (result) {
+                    dictCache[w] = result;
+                    _saveDictCache();
+                    updateDictHistory(w);
+                    return result;
+                }
+            }
+        }
+    } catch (e) {}
+    
+    // Fallback: Try wordsapi (requires API key in localStorage)
+    const wordsApiKey = localStorage.getItem('ydt_wordsapi_key');
+    if (wordsApiKey) {
+        try {
+            const response = await fetch(`https://wordsapiv1.p.rapidapi.com/words/${w}/definitions`, {
+                headers: { 'X-RapidAPI-Key': wordsApiKey }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.definitions) {
+                    const [turkish, ...defTranslations] = await Promise.all([
+                        fetchTurkishMeaning(w),
+                        ...data.definitions.map(d => fetchTurkishMeaning(d.definition || ''))
+                    ]);
+                    const result = {
+                        word: w,
+                        phonetic: '',
+                        audio: '',
+                        turkish: turkish,
+                        meanings: data.definitions.map((d, idx) => ({
+                            partOfSpeech: d.partOfSpeech || '',
+                            definitions: [{ text: d.definition || '', turkish: defTranslations[idx] || '' }],
+                            synonyms: [],
+                            antonyms: [],
+                            examples: []
+                        }))
+                    };
+                    dictCache[w] = result;
+                    _saveDictCache();
+                    updateDictHistory(w);
+                    return result;
+                }
+            }
+        } catch (e) {}
+    }
+    
+    return null;
+}
+
+async function buildDictResult(entry, w) {
+    const turkish = await fetchTurkishMeaning(w);
+    const result = {
+        word: w,
+        phonetic: entry.phonetic || entry.phonetics?.[0]?.text || '',
+        audio: entry.phonetics?.find(p => p.audio)?.audio || '',
+        turkish: turkish,
+        meanings: []
+    };
+    
+    for (const meaning of entry.meanings || []) {
+        const syns = meaning.synonyms?.slice(0, 10) || [];
+        const ants = meaning.antonyms?.slice(0, 10) || [];
+        
+        const defPromises = (meaning.definitions || []).map(d => 
+            d.definition ? fetchTurkishMeaning(d.definition) : Promise.resolve('')
+        );
+        const defTranslations = await Promise.all(defPromises);
+        const defs = (meaning.definitions || []).map((d, idx) => ({
+            text: d.definition || '',
+            turkish: defTranslations[idx] || ''
+        }));
+        
+        const exPromises = (meaning.definitions || [])
+            .filter(d => d.example)
+            .slice(0, 3)
+            .map(d => fetchTurkishMeaning(d.example).then(tr => ({ original: d.example, turkish: tr || '' })));
+        const resolvedExamples = exPromises.length > 0 ? await Promise.all(exPromises) : [];
+        
+        result.meanings.push({
+            partOfSpeech: meaning.partOfSpeech || '',
+            definitions: defs,
+            synonyms: syns,
+            antonyms: ants,
+            examples: resolvedExamples
+        });
+    }
+    return result;
+}
+
+async function buildDictResultFromDatamuse(data, w) {
+    const turkish = await fetchTurkishMeaning(w);
+    const result = {
+        word: w,
+        phonetic: '',
+        audio: '',
+        turkish: turkish,
+        meanings: []
+    };
+    
+    const defs = [];
+    const syns = [];
+    
+    data.forEach(item => {
+        if (item.defs && item.defs.length > 0) {
+            item.defs.forEach(d => {
+                const [pos, def] = d.split('\t');
+                if (def) {
+                    defs.push({ text: def, turkish: '' });
+                }
             });
         }
-        dictCache[w] = result;
-        _saveDictCache();
-        if (!dictHistory.includes(w)) {
-            dictHistory.unshift(w);
-            if (dictHistory.length > 50) dictHistory.pop();
-            _saveDictHistory();
+        if (item.tags && item.tags.forEach) {
+            item.tags.forEach(tag => {
+                if (tag.startsWith('syn:')) {
+                    syns.push(tag.substring(4));
+                }
+            });
         }
+    });
+    
+    if (defs.length > 0) {
+        // Translate definitions in batch
+        const defTexts = defs.map(d => d.text);
+        const translations = await Promise.all(defTexts.map(t => fetchTurkishMeaning(t)));
+        defs.forEach((d, i) => {
+            d.turkish = translations[i] || '';
+        });
+        
+        result.meanings.push({
+            partOfSpeech: defs.length > 0 ? 'noun' : '',
+            definitions: defs.slice(0, 5),
+            synonyms: [...new Set(syns)].slice(0, 10),
+            antonyms: [],
+            examples: []
+        });
         return result;
-    } catch (e) {
-        return null;
+    }
+    
+    return null;
+}
+
+function updateDictHistory(w) {
+    if (!dictHistory.includes(w)) {
+        dictHistory.unshift(w);
+        if (dictHistory.length > 50) dictHistory.pop();
+        _saveDictHistory();
     }
 }
 
@@ -5411,7 +5960,9 @@ function dictSearch() {
 }
 
 async function dictSearchWord(word) {
+    if (!document.getElementById('dict-result')) renderDict();
     const resultEl = document.getElementById('dict-result');
+    if (!resultEl) return;
     resultEl.innerHTML = `<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="margin-top:10px;color:var(--text3)">Aranıyor...</div></div>`;
     const data = await fetchDictData(word);
     if (!data) {
@@ -5437,23 +5988,31 @@ async function dictSearchWord(word) {
                 <span style="font-size:12px;color:var(--text3)">Anlam ${i + 1}</span>
             </div>`;
         
-        if (m.definitions.length > 0) {
+        if (m.definitions && m.definitions.length > 0) {
             html += `<div style="margin-bottom:12px">
                 <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">📖 TANIMLAR</div>`;
             m.definitions.forEach((def, idx) => {
-                html += `<div style="display:flex;gap:8px;margin-bottom:8px;padding:10px;background:var(--bg);border-radius:8px">
-                    <span style="background:var(--accent);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${idx + 1}</span>
-                    <span style="font-size:14px;color:var(--text);line-height:1.5">${def}</span>
+                html += `<div style="margin-bottom:10px;padding:12px;background:var(--bg);border-radius:10px">
+                    <div style="display:flex;gap:8px;margin-bottom:4px">
+                        <span style="background:var(--accent);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px">${idx + 1}</span>
+                        <span style="font-size:14px;color:var(--text);line-height:1.5">${def.text}</span>
+                    </div>
+                    ${def.turkish ? `<div style="font-size:13px;color:var(--text2);line-height:1.4;padding-left:30px;margin-top:2px">→ ${def.turkish}</div>` : ''}
                 </div>`;
             });
             html += `</div>`;
         }
         
-        if (m.example) {
-            html += `<div style="margin-bottom:12px;padding:12px;background:rgba(98,129,65,0.1);border-radius:8px;border-left:3px solid var(--accent)">
-                <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">💬 ÖRNEK CÜMLE</div>
-                <div style="font-size:14px;color:var(--text);font-style:italic">"${m.example}"</div>
-            </div>`;
+        if (m.examples && m.examples.length > 0) {
+            html += `<div style="margin-bottom:12px">
+                <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:8px">💬 ÖRNEK CÜMLELER</div>`;
+            m.examples.forEach(ex => {
+                html += `<div style="margin-bottom:10px;padding:12px;background:rgba(98,129,65,0.1);border-radius:8px;border-left:3px solid var(--accent)">
+                    <div style="font-size:14px;color:var(--text);font-style:italic;margin-bottom:4px">"${ex.original}"</div>
+                    ${ex.turkish ? `<div style="font-size:13px;color:var(--text2);line-height:1.4">→ ${ex.turkish}</div>` : ''}
+                </div>`;
+            });
+            html += `</div>`;
         }
         
         if (m.synonyms.length > 0) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fdil-v2';
+const CACHE_NAME = 'fdil-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,8 @@ const STATIC_ASSETS = [
   './icon-512.png',
   './icon-512-maskable.png'
 ];
+
+const DEV_MODE = true;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -35,6 +37,26 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  
+  if (DEV_MODE) {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        if (response && response.status === 200) {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return response;
+      }).catch(() => {
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
+        return new Response('Offline', { status: 503 });
+      })
+    );
+    return;
+  }
   
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {

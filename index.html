@@ -3,13 +3,15 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>FDil - YDT Kelime Öğrenme</title>
-  <meta name="description" content="YDT/DİL sınavı için kelime öğrenme uygulaması. Flash kartlar, testler, spaced repetition ve oyunlaştırma ile etkili öğrenme.">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>FDil - YDT Kelime Öğrenme s</title>
+  <meta name="description"
+    content="YDT/DİL sınavı için kelime öğrenme uygulaması. Flash kartlar, testler, spaced repetition ve oyunlaştırma ile etkili öğrenme.">
   <meta name="keywords" content="YDT, DİL, kelime, English vocabulary, YKS, sınav, flash kart, öğrenme">
   <meta name="author" content="yusufbrny">
   <meta name="robots" content="index, follow">
-  
+
   <!-- PWA Meta -->
   <meta name="theme-color" content="#628141" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#8BAE66" media="(prefers-color-scheme: dark)">
@@ -20,31 +22,34 @@
   <meta name="application-name" content="FDil - YDT Kelime">
   <meta name="msapplication-TileColor" content="#628141">
   <meta name="msapplication-tap-highlight" content="no">
-  
+
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="FDil">
   <meta property="og:title" content="FDil - YDT Kelime Öğrenme">
-  <meta property="og:description" content="YDT/DİL sınavı için kelime öğrenme uygulaması. Flash kartlar, testler ve spaced repetition.">
+  <meta property="og:description"
+    content="YDT/DİL sınavı için kelime öğrenme uygulaması. Flash kartlar, testler ve spaced repetition.">
   <meta property="og:locale" content="tr_TR">
-  
+
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="FDil - YDT Kelime Öğrenme">
   <meta name="twitter:description" content="YDT/DİL sınavı için kelime öğrenme uygulaması.">
-  
+
   <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%23628141' width='32' height='32' rx='6'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='white'>F</text></svg>">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%23628141' width='180' height='180' rx='40'/><text x='90' y='130' font-size='100' text-anchor='middle' fill='white'>F</text></svg>">
-  
+  <link rel="icon" type="image/svg+xml"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%23628141' width='32' height='32' rx='6'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='white'>F</text></svg>">
+  <link rel="apple-touch-icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%23628141' width='180' height='180' rx='40'/><text x='90' y='130' font-size='100' text-anchor='middle' fill='white'>F</text></svg>">
+
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  
+
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
-  
+
   <!-- Styles -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -65,9 +70,10 @@
           <button class="header-btn" onclick="showSettings()" title="Ayarlar">⚙️</button>
         </div>
       </div>
-      <div class="global-search-wrap">
-        <input class="global-search-input" id="global-search" placeholder="Tüm kelimelerde ara... (İng / Türkçe)"
+      <div class="global-search-wrap" style="display:flex;gap:8px;align-items:center">
+        <input class="global-search-input" id="global-search" placeholder="Kelime ara... (İng/Türkçe)" style="flex:1"
           oninput="onGlobalSearch(this.value)" autocomplete="off">
+        <button onclick="clearGlobalSearch()" id="global-search-clear" style="display:none;width:36px;height:36px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text3);font-size:16px;cursor:pointer;flex-shrink:0">✕</button>
       </div>
       <div id="home-normal-content" class="home-content">
         <div id="gm-goal-card" class="gm-goal-card-placeholder"></div>
@@ -244,16 +250,16 @@
   <script src="data.js"></script>
   <!-- app.js sonra (tüm fonksiyonlar + gamification kodu içinde gömülü) -->
   <script src="app.js"></script>
-  
+
   <!-- Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
+      window.addEventListener('load', function () {
         navigator.serviceWorker.register('sw.js')
-          .then(function(registration) {
+          .then(function (registration) {
             console.log('SW registered:', registration.scope);
           })
-          .catch(function(error) {
+          .catch(function (error) {
             console.log('SW registration failed:', error);
           });
       });
