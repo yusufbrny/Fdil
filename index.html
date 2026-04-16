@@ -70,10 +70,14 @@
           <button class="header-btn" onclick="showSettings()" title="Ayarlar">⚙️</button>
         </div>
       </div>
-      <div class="global-search-wrap" style="display:flex;gap:8px;align-items:center">
-        <input class="global-search-input" id="global-search" placeholder="Kelime ara... (İng/Türkçe)" style="flex:1"
-          oninput="onGlobalSearch(this.value)" autocomplete="off">
-        <button onclick="clearGlobalSearch()" id="global-search-clear" style="display:none;width:36px;height:36px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text3);font-size:16px;cursor:pointer;flex-shrink:0">✕</button>
+      <div class="global-search-wrap">
+        <div style="position:relative">
+          <input class="global-search-input" id="global-search" placeholder="Kelime ara... (İng/Türkçe)"
+            oninput="onGlobalSearch(this.value)" autocomplete="off" autocorrect="off" autocapitalize="off"
+            spellcheck="false" enterkeyhint="search">
+          <button onclick="clearGlobalSearch()" id="global-search-clear" style="display:none"
+            aria-label="Aramayı temizle">✕</button>
+        </div>
       </div>
       <div id="home-normal-content" class="home-content">
         <div id="gm-goal-card" class="gm-goal-card-placeholder"></div>
@@ -89,12 +93,18 @@
         </div>
         <div class="home-grid" id="unit-grid"></div>
         <div style="height:1px;background:var(--border);margin:8px 0;"></div>
-        <div class="home-card mix-card" onclick="showMixQuiz()">
-          <div>
-            <div class="home-card-title">🎲 Karışık Soru Modu</div>
-            <div class="home-card-sub">Tüm ünitelerden rastgele test</div>
+        <div class="mix-card-wrap">
+          <div class="home-card mix-card" onclick="toggleMixModes(this)">
+            <div>
+              <div class="home-card-title">🎲 Karışık Soru Modu</div>
+              <div class="home-card-sub">Tüm ünitelerden rastgele — <span id="mix-mode-label">Çoktan Seçmeli</span></div>
+            </div>
+            <span style="color:#9b59b6;font-size:20px;font-weight:700">▼</span>
           </div>
-          <span style="color:#9b59b6;font-size:20px;font-weight:700">→</span>
+          <div class="mix-mode-dropdown" id="mix-mode-dropdown" style="display:none">
+            <button class="mix-mode-btn" onclick="startMixMC()">✅ Çoktan Seçmeli</button>
+            <button class="mix-mode-btn" onclick="startMixFlash()">🃏 Flash Kartlar</button>
+          </div>
         </div>
         <div class="home-card" onclick="showErrorBox()">
           <div>

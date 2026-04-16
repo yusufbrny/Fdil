@@ -169,6 +169,7 @@ function saveCustomWord() {
     const exists = customVocab.find(w => w.word.toLowerCase() === word.toLowerCase());
     if (exists) { showToast('Bu kelime zaten listende var!'); return; }
     customVocab.push({ word, meanings, example });
+    _trackQuestStat('customAdded', true);
     showToast('✓ "' + word + '" eklendi!');
   } else {
     customVocab[editingWordIndex] = { word, meanings, example };
@@ -358,9 +359,10 @@ let _fcSwiping = false;
 let _flashBackFn = null;
 let _flashTitle = null;
 let _flashUnitTagFn = null;
+let _pvMode = false;
 
-// ===== MODES =====
-// -- Flash Cards --
+// ===== MODES =-->
+// -- Flash Cards -->
 function startFlash(words) {
   if (!currentUnit && !words) { showToast('Önce bir ünite seç!'); return; }
   const pool = words || (UNITS[currentUnit] ? shuffle(UNITS[currentUnit].words) : []);
@@ -373,6 +375,7 @@ function startFlash(words) {
   _flashBackFn = null;
   _flashTitle = null;
   _flashUnitTagFn = null;
+  _pvMode = false;
   renderFlash();
   showScreen('screen-flash');
 }
@@ -399,13 +402,19 @@ function renderFlash(backFn, titleOverride, unitTagFn) {
 
   const total = currentCards.length;
   const pct = Math.round((cardIndex / total) * 100);
-  const backHandler = _flashBackFn || `openUnit(currentUnit || 1)`;
+  const backHandler = _flashBackFn || `openUnit(${currentUnit || 1})`;
   const title = _flashTitle || 'Flash Kartlar';
   const unitInfo = _flashUnitTagFn ? _flashUnitTagFn(word) : `Ünite ${word._unit || currentUnit || 1}`;
+  const isPV = _pvMode || currentCards._pvMode;
 
   let metaFront = '', metaBack = '';
-  try { metaFront = renderWordMetaChips(word[0]); } catch(e) {}
-  try { metaBack = renderWordMetaChips(word[0], true); } catch(e) {}
+  if (!isPV) {
+    try { metaFront = renderWordMetaChips(word[0]); } catch (e) { }
+    try { metaBack = renderWordMetaChips(word[0], true); } catch (e) { }
+  }
+
+  const frontLabel = isPV ? 'Phrasal Verb' : 'İngilizce';
+  const tapHint = isPV ? 'Kartı çevir — anlamı gör' : 'kartı çevir butonuna bas veya kartı tıkla';
 
   s.innerHTML = `
   <div class="unit-header">
@@ -430,13 +439,13 @@ function renderFlash(backFn, titleOverride, unitTagFn) {
         <div class="flash-face flash-front">
           <span class="flash-unit-badge">${unitInfo}</span>
           <div class="flash-tap-icon">👆</div>
-          <div class="flash-hint">İngilizce</div>
+          <div class="flash-hint">${frontLabel}</div>
           <div class="flash-word-row">
             <div class="flash-word">${esc(word[0])}</div>
             <button class="pronounce-btn" onclick="event.stopPropagation();speakWord('${escQ(word[0])}')" title="Telaffuz dinle">🔊</button>
           </div>
           ${metaFront}
-          <div class="flash-hint-bottom">kartı çevir butonuna bas veya kartı tıkla</div>
+          <div class="flash-hint-bottom">${tapHint}</div>
         </div>
         <div class="flash-face flash-back">
           <div class="flash-hint" style="color:rgba(255,255,255,0.7)">Türkçe</div>
@@ -467,6 +476,14 @@ function flipCard() {
   if (fc && !fc.classList.contains('dragging')) fc.classList.toggle('flipped');
 }
 
+// Patch flipCard to track quest stat
+const _origFlipCard = window.flipCard;
+window.flipCard = function () {
+  const result = _origFlipCard.apply(this, arguments);
+  _trackQuestStat('cardsFlipped');
+  return result;
+};
+
 function handleFlashTap(e) {
   if (e.target.closest('.swipe-btn') || e.target.closest('button')) return;
   if (flashTouchHandled) { flashTouchHandled = false; return; }
@@ -483,19 +500,19 @@ function renderWordMetaChips(word, darkBg = false) {
   const bgColor = darkBg ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.04)';
   const borderColor = darkBg ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)';
   const chipStyle = `style="background:${bgColor};border:1px solid ${borderColor};border-radius:12px;padding:4px 10px;font-size:11px;font-weight:600;margin:3px 2px;display:inline-block"`;
-  const labelStyle = `style="color:${darkBg?'rgba(255,255,255,0.6)':'var(--text3)'};font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px"`;
+  const labelStyle = `style="color:${darkBg ? 'rgba(255,255,255,0.6)' : 'var(--text3)'};font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px"`;
   let html = '<div style="margin-top:12px;display:flex;flex-wrap:wrap;justify-content:center;gap:4px">';
   if (meta.synonyms.length) {
     const syns = meta.synonyms.slice(0, 3).join(', ');
-    html += `<div ${chipStyle}><div ${labelStyle} style="color:${synColor}">Eş</div><span style="color:${darkBg?'white':'var(--text)'}">${esc(syns)}</span></div>`;
+    html += `<div ${chipStyle}><div ${labelStyle} style="color:${synColor}">Eş</div><span style="color:${darkBg ? 'white' : 'var(--text)'}">${esc(syns)}</span></div>`;
   }
   if (meta.antonyms.length) {
     const ants = meta.antonyms.slice(0, 3).join(', ');
-    html += `<div ${chipStyle}><div ${labelStyle} style="color:${antColor}">Zıt</div><span style="color:${darkBg?'white':'var(--text)'}">${esc(ants)}</span></div>`;
+    html += `<div ${chipStyle}><div ${labelStyle} style="color:${antColor}">Zıt</div><span style="color:${darkBg ? 'white' : 'var(--text)'}">${esc(ants)}</span></div>`;
   }
   if (meta.family.length) {
     const fams = meta.family.slice(0, 3).join(', ');
-    html += `<div ${chipStyle}><div ${labelStyle} style="color:${famColor}">Aile</div><span style="color:${darkBg?'white':'var(--text)'}">${esc(fams)}</span></div>`;
+    html += `<div ${chipStyle}><div ${labelStyle} style="color:${famColor}">Aile</div><span style="color:${darkBg ? 'white' : 'var(--text)'}">${esc(fams)}</span></div>`;
   }
   html += '</div>';
   return html;
@@ -666,18 +683,31 @@ function swipeCard(dir) {
   const unit = word._unit || currentUnit || 1;
 
   try {
-    if (dir === 'right') {
-      known.push(word);
-      markLearned(unit, word[0]);
-      delete errorBox['u' + unit + '_' + word[0]];
-      saveErrors();
+    if (_pvMode) {
+      const card = currentCards[cardIndex];
+      const pvKey = 'pv_' + (card[0] || '').replace(/\s+/g, '_');
+      if (dir === 'right') {
+        known.push(word);
+        if (pvErrors[pvKey]) { delete pvErrors[pvKey]; savePVErrors(); }
+      } else {
+        unknown.push(word);
+        pvErrors[pvKey] = { pv: card[0], tr: card[1].split('\n')[0], unit };
+        savePVErrors();
+      }
     } else {
-      unknown.push(word);
-      markUnlearned(unit, word[0]);
-      errorBox['u' + unit + '_' + word[0]] = { word: word[0], meaning: word[1], unit };
-      saveErrors();
+      if (dir === 'right') {
+        known.push(word);
+        markLearned(unit, word[0]);
+        delete errorBox['u' + unit + '_' + word[0]];
+        saveErrors();
+      } else {
+        unknown.push(word);
+        markUnlearned(unit, word[0]);
+        errorBox['u' + unit + '_' + word[0]] = { word: word[0], meaning: word[1], unit };
+        saveErrors();
+      }
     }
-  } catch(e) {}
+  } catch (e) { }
 
   const fc = document.getElementById('fc');
   if (fc) {
@@ -700,7 +730,7 @@ function swipeCard(dir) {
       } else {
         renderFlash();
       }
-    } catch(e) {
+    } catch (e) {
       _fcSwiping = false;
       renderFlash();
     }
@@ -710,10 +740,10 @@ function swipeCard(dir) {
 function renderFlashResult(backFn) {
   const s = document.getElementById('screen-flash');
   if (!s) return;
-  
+
   const total = known.length + unknown.length;
   const backHandler = backFn || _flashBackFn || (currentUnit ? `openUnit(${currentUnit})` : 'goHome()');
-  
+
   s.innerHTML = `
   <div class="result-wrap">
     <div class="result-emoji">${unknown.length === 0 ? '🏆' : known.length > unknown.length ? '💪' : '📚'}</div>
@@ -723,8 +753,9 @@ function renderFlashResult(backFn) {
       <div class="stat-box"><div class="stat-num" style="color:var(--success)">${known.length}</div><div class="stat-lbl">Bildim ✓</div></div>
       <div class="stat-box"><div class="stat-num" style="color:var(--error)">${unknown.length}</div><div class="stat-lbl">Bilmedim ✗</div></div>
     </div>
-    ${unknown.length > 0 ? `<button class="result-btn" onclick="startFlash(shuffle(unknown))">Bilemediklerimi Tekrar Et</button>` : ''}
-    <button class="result-btn outline" onclick="${backHandler}">Geri Dön</button>
+    ${unknown.length > 0 ? `<button class="result-btn" onclick="startFlash(shuffle(unknown))">🔁 Bilemediklerimi Tekrar Et</button>` : ''}
+    ${_pvMode ? `<button class="result-btn" onclick="startPVFlash()">🔀 Yeniden Başla</button>` : ''}
+    <button class="result-btn outline" onclick="${backHandler}">← Geri Dön</button>
   </div>`;
 }
 
@@ -968,7 +999,7 @@ function checkSynQuiz(btn, chosen, correct) {
 // ===== GLOBAL SEARCH =====
 let _gsTimer = null;
 let _gsApiCache = JSON.parse(localStorage.getItem('ydt_gs_api_cache') || '{}');
-const LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 const GS_PAGE = 30;
 
 function onGlobalSearch(val) {
@@ -980,7 +1011,7 @@ function onGlobalSearch(val) {
 
 function clearGlobalSearch() {
   const inp = document.getElementById('global-search');
-  if (inp) inp.value = '';
+  if (inp) { inp.value = ''; inp.focus(); }
   const clearBtn = document.getElementById('global-search-clear');
   if (clearBtn) clearBtn.style.display = 'none';
   const normalContent = document.getElementById('home-normal-content');
@@ -999,35 +1030,35 @@ function gsDoSearch(query) {
   const normalContent = document.getElementById('home-normal-content');
   const searchContent = document.getElementById('home-search-content');
   const resultsEl = document.getElementById('search-results');
-  
+
   if (!resultsEl) return;
-  
+
   if (!query) {
     if (normalContent) normalContent.style.display = '';
     if (searchContent) searchContent.style.display = 'none';
     return;
   }
-  
+
   if (normalContent) normalContent.style.display = 'none';
   if (searchContent) searchContent.style.display = 'flex';
-  
+
   // Build letter nav
   const letterNav = LETTERS.map(l => {
-    const active = query.toUpperCase() === l ? 'background:var(--accent);color:white' : 'background:var(--card);color:var(--text)';
-    return `<button onclick="onLetterClick('${l}')" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border2);font-size:11px;font-weight:700;cursor:pointer;${active}">${l}</button>`;
+    const isActive = query.toUpperCase() === l;
+    return `<button class="letter-nav-btn${isActive ? ' active' : ''}" onclick="onLetterClick('${l}')">${l}</button>`;
   }).join('');
-  
-  const headerHtml = `<div style="padding:8px 16px;border-bottom:1px solid var(--border)">
-    <div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-bottom:8px">${letterNav}</div>
+
+  const headerHtml = `<div class="search-letter-header">
+    <div class="search-letter-row">${letterNav}</div>
   </div>`;
-  
+
   resultsEl.innerHTML = headerHtml + `<div style="text-align:center;padding:30px"><div class="spinner"></div></div>`;
   resultsEl.scrollTop = 0;
-  
+
   // Gather results
   const q = query.toLowerCase();
   const results = [];
-  
+
   // YDT units
   for (let u = 1; u <= 10; u++) {
     UNITS[u].words.forEach(w => {
@@ -1036,21 +1067,21 @@ function gsDoSearch(query) {
       }
     });
   }
-  
+
   // Custom vocab
   customVocab.forEach((entry, idx) => {
     if (entry.word.toLowerCase().includes(q) || entry.meanings.some(m => m.toLowerCase().includes(q))) {
       results.push({ word: [entry.word, entry.meanings.join(' / '), entry.example || ''], unit: '📝', type: 'custom', idx });
     }
   });
-  
+
   // General cache
   Object.keys(generalCache).forEach(w => {
     if (w.toLowerCase().includes(q) || (generalCache[w].definitions && generalCache[w].definitions[0] && generalCache[w].definitions[0].toLowerCase().includes(q))) {
       results.push({ word: [w, generalCache[w].definitions?.[0] || '', ''], unit: '🌐', type: 'general' });
     }
   });
-  
+
   if (results.length === 0) {
     // Try API
     if (_gsApiCache[q]) {
@@ -1076,7 +1107,7 @@ function gsDoSearch(query) {
     }
     return;
   }
-  
+
   // Build results HTML
   const hl = (text, qq) => {
     if (!text) return '';
@@ -1084,11 +1115,11 @@ function gsDoSearch(query) {
     if (idx === -1) return esc(text);
     return esc(text.slice(0, idx)) + '<mark>' + esc(text.slice(idx, idx + qq.length)) + '</mark>' + esc(text.slice(idx + qq.length));
   };
-  
+
   let html = headerHtml;
   html += `<div style="font-size:11px;color:var(--text3);font-weight:600;padding:6px 16px">${results.length} sonuç</div>`;
   html += `<div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:8px">`;
-  
+
   results.slice(0, GS_PAGE).forEach(r => {
     if (r.type === 'custom') {
       html += `<div class="search-result-item" onclick="showAddWord(${r.idx})">
@@ -1110,13 +1141,13 @@ function gsDoSearch(query) {
       </div>`;
     }
   });
-  
+
   html += `</div>`;
-  
+
   if (results.length > GS_PAGE) {
     html += `<div style="text-align:center;padding:10px;color:var(--text3);font-size:12px">+${results.length - GS_PAGE} sonuç daha — hepsini görmek için yazmaya devam et</div>`;
   }
-  
+
   resultsEl.innerHTML = html;
 }
 
@@ -1128,7 +1159,7 @@ function gsBuildApiHtml(apiData, query) {
     return esc(text.slice(0, idx)) + '<mark>' + esc(text.slice(idx, idx + qq.length)) + '</mark>' + esc(text.slice(idx + qq.length));
   };
   const def = apiData.meanings?.[0]?.definitions?.[0]?.text || apiData.turkish || '';
-  
+
   // Related words from synonyms
   const related = [];
   if (apiData.meanings) {
@@ -1136,10 +1167,10 @@ function gsBuildApiHtml(apiData, query) {
       if (m.synonyms) m.synonyms.slice(0, 4).forEach(s => { if (!related.includes(s)) related.push(s); });
     });
   }
-  const relatedHtml = related.length > 0 
+  const relatedHtml = related.length > 0
     ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">${related.map(r => `<span onclick="event.stopPropagation();openDictWord('${escQ(r)}')" style="background:rgba(46,204,113,0.1);color:#27ae60;padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid rgba(46,204,113,0.2)">${r}</span>`).join('')}</div>`
     : '';
-  
+
   return `<div style="padding:0 16px">
     <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:8px">🌐 Sözlük</div>
     <div class="search-result-item" onclick="openDictWord('${escQ(apiData.word)}')" style="border:2px solid var(--accent)">
@@ -1153,7 +1184,7 @@ function gsBuildApiHtml(apiData, query) {
 function gsFindSimilar(q) {
   const similar = [];
   const seen = new Set();
-  
+
   // From API cache synonyms
   if (_gsApiCache[q] && _gsApiCache[q].meanings) {
     _gsApiCache[q].meanings.forEach(m => {
@@ -1168,7 +1199,7 @@ function gsFindSimilar(q) {
       }
     });
   }
-  
+
   // From custom vocab
   customVocab.forEach(entry => {
     const w = entry.word.toLowerCase();
@@ -1180,7 +1211,7 @@ function gsFindSimilar(q) {
       }
     }
   });
-  
+
   // From general cache
   Object.keys(generalCache).forEach(w => {
     if (w !== q && !seen.has(w)) {
@@ -1190,7 +1221,7 @@ function gsFindSimilar(q) {
       }
     }
   });
-  
+
   // From YDT words
   if (typeof words !== 'undefined') {
     for (let u = 1; u <= 50; u++) {
@@ -1208,27 +1239,27 @@ function gsFindSimilar(q) {
       if (similar.length >= 15) break;
     }
   }
-  
+
   return similar.slice(0, 15);
 }
 
 function gsBuildSimilarHtml(similar, q) {
   if (!similar || similar.length === 0) return '';
-  
+
   const groups = { synonym: [], custom: [], general: [], ydt: [] };
   similar.forEach(s => {
     if (groups[s.source]) groups[s.source].push(s.word);
   });
-  
+
   const icons = { synonym: '🔗', custom: '📝', general: '🌐', ydt: '📚' };
   const colors = { synonym: '#27ae60', custom: '#3498db', general: '#9b59b6', ydt: '#e67e22' };
-  
+
   let html = `<div style="padding:12px 16px 20px"><div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:10px">Benzer Kelimeler</div><div style="display:flex;flex-wrap:wrap;gap:6px">`;
-  
+
   similar.slice(0, 12).forEach(s => {
     html += `<span onclick="event.stopPropagation();openDictWord('${escQ(s.word)}')" style="background:rgba(${hexToRgb(colors[s.source])},0.1);color:${colors[s.source]};padding:6px 12px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(${hexToRgb(colors[s.source])},0.2)">${s.word}</span>`;
   });
-  
+
   html += `</div></div>`;
   return html;
 }
@@ -1346,10 +1377,54 @@ function checkAntQuiz(btn, chosen, correct) {
     setTimeout(() => { window._antIdx++; renderAntQuiz(); }, 1600);
   }
 }
-function showMixQuiz() {
+function toggleMixModes(el) {
+  const dropdown = document.getElementById('mix-mode-dropdown');
+  const wasHidden = dropdown.style.display === 'none';
+  dropdown.style.display = wasHidden ? 'block' : 'none';
+  el.querySelector('span').textContent = wasHidden ? 'Kapat' : '▼';
+}
+
+function closeMixDropdown() {
+  const dropdown = document.getElementById('mix-mode-dropdown');
+  const label = document.getElementById('mix-mode-label');
+  if (dropdown) dropdown.style.display = 'none';
+  if (label) label.textContent = 'Çoktan Seçmeli';
+}
+
+function getMixPool() {
   let pool = [];
-  for (let u = 1; u <= 10; u++) { UNITS[u].words.forEach(w => { const wc = [...w]; wc._unit = u; pool.push(wc); }); }
-  startMC(shuffle(pool).slice(0, 40), 'goHome()', '🎲 Karışık Çoktan Seçmeli (40 Soru)');
+  for (let u = 1; u <= 10; u++) {
+    UNITS[u].words.forEach(w => {
+      const wc = [...w];
+      wc._unit = u;
+      pool.push(wc);
+    });
+  }
+  return shuffle(pool);
+}
+
+function startMixMC() {
+  closeMixDropdown();
+  const pool = getMixPool().slice(0, 40);
+  startMC(pool, 'goHome()', '🎲 Karışık Çoktan Seçmeli (40 Soru)');
+}
+
+function startMixFlash() {
+  closeMixDropdown();
+  const pool = getMixPool().slice(0, 30);
+  currentCards = pool;
+  cardIndex = 0; known = []; unknown = [];
+  _fcSwiping = false;
+  _flashBackFn = 'goHome()';
+  _flashTitle = '🎲 Karışık Flash Kartlar';
+  _flashUnitTagFn = w => `Ünite ${w._unit}`;
+  _pvMode = false;
+  renderFlash();
+  showScreen('screen-flash');
+}
+
+function showMixQuiz() {
+  startMixMC();
 }
 
 function showErrorBox() {
@@ -1403,16 +1478,16 @@ function practiceErrorsMC() {
 }
 
 // ===== STATS & UI FIXES =====
-function showStats() { 
+function showStats() {
   const overlay = document.getElementById('stats-overlay');
   const panel = overlay.querySelector('.stats-panel');
   overlay.style.display = 'flex';
   if (panel) panel.classList.remove('closing');
   overlay.classList.remove('closing');
-  renderStatsContent(); 
+  renderStatsContent();
 }
 
-function closeStats() { 
+function closeStats() {
   const overlay = document.getElementById('stats-overlay');
   const panel = overlay.querySelector('.stats-panel');
   if (panel) panel.classList.add('closing');
@@ -1768,198 +1843,27 @@ function getPVPool() {
   return (PHRASAL_VERBS[pvCurrentUnit] || []).map(p => ({ ...p, _unit: pvCurrentUnit }));
 }
 
-// ===== PV FLASH CARDS =====
-let pvFlashCards = [], pvFlashIdx = 0, pvFlashKnown = [], pvFlashUnknown = [];
-let pvFlashRevealed = false;
-
+// ===== PV FLASH (unified with regular flash) =====
 function startPVFlash() {
   const pool = getPVPool();
   if (pool.length === 0) { showToast('Bu ünitede phrasal verb yok!'); return; }
-  pvFlashCards = shuffle(pool);
-  pvFlashIdx = 0; pvFlashKnown = []; pvFlashUnknown = [];
-  showScreen('screen-phrasal-flash');
-  renderPVFlash();
-}
-
-function renderPVFlash() {
-  const s = document.getElementById('screen-phrasal-flash');
-  if (pvFlashIdx >= pvFlashCards.length) { renderPVFlashResult(); return; }
-  const card = pvFlashCards[pvFlashIdx];
-  const total = pvFlashCards.length;
-  const pct = Math.round((pvFlashIdx / total) * 100);
-  pvFlashRevealed = false;
-
-  const meaningLines = card.tr.split('\n');
-  const meaningHtml = meaningLines.length > 1
-    ? meaningLines.map((t, i) => `<div style="padding:2px 0"><span style="color:#e67e22;font-weight:800;margin-right:6px">${i + 1}.</span>${esc(t.replace(/^\d+\.\s*/, ''))}</div>`).join('')
-    : `<div>${esc(card.tr)}</div>`;
-
-  const pvEscaped = card.pv.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const exMasked = card.ex ? card.ex.replace(new RegExp(pvEscaped, 'gi'), '____') : '';
-
-  s.innerHTML = `
-    <div class="unit-header">
-      <button class="back-btn" onclick="showPhrasalVerbs(pvCurrentUnit||1)">←</button>
-      <div>
-        <div class="unit-title-h">🃏 PV Flash Kartlar</div>
-        <div class="unit-sub">${pvFlashIdx + 1}/${total} · ${pvCurrentUnit === 0 ? 'Tümü' : 'Ünite ' + card._unit}</div>
-      </div>
-    </div>
-    <div class="flash-wrap">
-      <div class="flash-progress-row">
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <span class="flash-counter-badge">${pvFlashIdx + 1}/${total}</span>
-      </div>
-      <div class="flash-card-wrap">
-        <div class="flash-card" id="pv-fc" style="border-radius:24px">
-          <!-- FRONT -->
-          <div class="flash-face flash-front" style="border-color:rgba(230,126,34,0.3)">
-            <div style="position:absolute;top:14px;right:14px;font-size:10px;font-weight:700;color:#e67e22;background:rgba(230,126,34,0.1);border:1px solid rgba(230,126,34,0.3);border-radius:10px;padding:2px 8px">Ünite ${card._unit}</div>
-            <div style="font-size:26px;margin-bottom:10px;opacity:0.3">👆</div>
-            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Phrasal Verb</div>
-            <div style="font-size:clamp(22px,6vw,32px);font-weight:800;color:#e67e22;line-height:1.2;margin-bottom:12px">${esc(card.pv)}</div>
-            ${exMasked ? `<div style="font-size:13px;font-style:italic;color:var(--text3);background:var(--bg);padding:10px 14px;border-radius:12px;line-height:1.6;margin-top:4px">"${esc(exMasked)}"</div>` : ''}
-            <div style="font-size:12px;font-weight:500;color:var(--text3);margin-top:14px">Ortaya dokun — anlamı gör</div>
-          </div>
-          <!-- BACK -->
-          <div class="flash-face flash-back" style="background:linear-gradient(145deg,#e67e22,#d35400)">
-            <div style="position:absolute;top:-50px;right:-50px;width:150px;height:150px;background:rgba(255,255,255,0.07);border-radius:50%"></div>
-            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;position:relative;z-index:1">Türkçe Anlam</div>
-            <div style="font-size:clamp(15px,4vw,20px);font-weight:700;color:#fff;line-height:1.7;position:relative;z-index:1">${meaningHtml}</div>
-            ${card.ex ? `<div style="font-size:12px;font-style:italic;color:rgba(255,255,255,0.85);background:rgba(0,0,0,0.12);padding:10px 14px;border-radius:12px;line-height:1.5;margin-top:14px;position:relative;z-index:1">"${esc(card.ex)}"</div>` : ''}
-          </div>
-        </div>
-      </div>
-      <div class="flash-swipe-guide">
-        <div class="flash-guide-item"><div class="flash-guide-dot" style="background:var(--error)"></div><span style="color:var(--error)">← Bilmedim</span></div>
-        <span style="font-size:10px;color:var(--text3)">sürükle veya bas</span>
-        <div class="flash-guide-item"><span style="color:var(--success)">Bildim →</span><div class="flash-guide-dot" style="background:var(--success)"></div></div>
-      </div>
-      <div class="swipe-btn-row">
-        <button class="swipe-btn wrong" id="pvbtn-wrong" onclick="pvFlashAnswer(false)">✗ Bilmedim</button>
-        <button class="swipe-btn right" id="pvbtn-right" onclick="pvFlashAnswer(true)">✓ Bildim</button>
-      </div>
-    </div>
-  `;
-  initPVFlashDrag();
-}
-
-function initPVFlashDrag() {
-  const fc = document.getElementById('pv-fc');
-  if (!fc) return;
-  let startX = 0, startY = 0, curX = 0, isDragging = false, didDrag = false, isFlipped = false;
-  const SWIPE_THRESHOLD = 80, DRAG_START_MIN = 8;
-
-  function onStart(x, y) { startX = x; startY = y; curX = x; isDragging = true; didDrag = false; }
-
-  function onMove(x, y) {
-    if (!isDragging) return;
-    const dx = x - startX, dy = y - startY;
-    if (!didDrag && Math.abs(dy) > Math.abs(dx)) { isDragging = false; return; }
-    if (Math.abs(dx) < DRAG_START_MIN && !didDrag) return;
-    didDrag = true; curX = x;
-    const rot = Math.min(18, Math.max(-18, dx / 12));
-    isFlipped = fc.style.transform.includes('rotateY(180deg)');
-    fc.classList.add('dragging');
-    fc.style.transform = `translateX(${dx}px) rotate(${rot}deg)${isFlipped ? ' rotateY(180deg)' : ''}`;
-    const progress = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD);
-    const btnW = document.getElementById('pvbtn-wrong'), btnR = document.getElementById('pvbtn-right');
-    if (dx < 0) {
-      if (btnW) { btnW.classList.add('drag-hint-left'); btnW.classList.remove('drag-hint-right'); }
-      if (btnR) btnR.classList.remove('drag-hint-right');
-    } else if (dx > 0) {
-      if (btnR) { btnR.classList.add('drag-hint-right'); btnR.classList.remove('drag-hint-left'); }
-      if (btnW) btnW.classList.remove('drag-hint-left');
-    } else {
-      if (btnW) btnW.classList.remove('drag-hint-left');
-      if (btnR) btnR.classList.remove('drag-hint-right');
-    }
-  }
-
-  function onEnd() {
-    if (!isDragging) return;
-    isDragging = false;
-    const dx = curX - startX;
-    fc.classList.remove('dragging');
-    const btnW = document.getElementById('pvbtn-wrong'), btnR = document.getElementById('pvbtn-right');
-    if (btnW) btnW.classList.remove('drag-hint-left');
-    if (btnR) btnR.classList.remove('drag-hint-right');
-    if (!didDrag) { flipPVCard(); return; }
-    if (dx < -SWIPE_THRESHOLD) pvFlashAnswer(false);
-    else if (dx > SWIPE_THRESHOLD) pvFlashAnswer(true);
-    else {
-      isFlipped = fc.style.transform.includes('rotateY(180deg)');
-      fc.style.transition = 'transform 0.4s cubic-bezier(0.2,0.8,0.2,1)';
-      fc.style.transform = isFlipped ? 'rotateY(180deg)' : '';
-      setTimeout(() => { if (fc) fc.style.transition = ''; }, 400);
-    }
-  }
-
-  fc.addEventListener('touchstart', e => { const t = e.touches[0]; onStart(t.clientX, t.clientY); }, { passive: true });
-  fc.addEventListener('touchmove', e => {
-    const t = e.touches[0]; onMove(t.clientX, t.clientY);
-    if (isDragging && Math.abs(t.clientX - startX) > DRAG_START_MIN) e.preventDefault();
-  }, { passive: false });
-  fc.addEventListener('touchend', () => onEnd());
-  fc.addEventListener('touchcancel', () => onEnd());
-  fc.addEventListener('mousedown', e => {
-    onStart(e.clientX, e.clientY);
-    const mv = ev => onMove(ev.clientX, ev.clientY);
-    const up = () => { onEnd(); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
-    document.addEventListener('mousemove', mv);
-    document.addEventListener('mouseup', up);
+  const adapted = pool.map(p => {
+    const multiMeanings = p.tr.split('\n').map((t, i) => `${i + 1}. ${t.replace(/^\d+\.\s*/, '')}`).join(' / ');
+    return [p.pv, multiMeanings, p.ex || '', p._unit];
   });
+  currentCards = shuffle(adapted);
+  cardIndex = 0; known = []; unknown = [];
+  _fcSwiping = false;
+  _flashBackFn = 'showPhrasalVerbs(pvCurrentUnit||1)';
+  _flashTitle = '🃏 PV Flash Kartlar';
+  _flashUnitTagFn = w => `Ünite ${w._unit}`;
+  _pvMode = true;
+  renderFlash();
+  showScreen('screen-flash');
 }
 
-function flipPVCard() {
-  const fc = document.getElementById('pv-fc');
-  if (!fc) return;
-  const flipped = fc.style.transform.includes('rotateY(180deg)');
-  fc.style.transition = 'transform 0.55s cubic-bezier(0.2,0.8,0.2,1)';
-  fc.style.transform = flipped ? '' : 'rotateY(180deg)';
-  setTimeout(() => { if (fc) fc.style.transition = ''; }, 600);
-}
-
-function pvFlashAnswer(known) {
-  const card = pvFlashCards[pvFlashIdx];
-  const fc = document.getElementById('pv-fc');
-  if (fc) {
-    fc.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease';
-    const flipped = fc.style.transform.includes('rotateY(180deg)');
-    fc.style.transform = known
-      ? `translateX(110vw) rotate(22deg)${flipped ? ' rotateY(180deg)' : ''}`
-      : `translateX(-110vw) rotate(-22deg)${flipped ? ' rotateY(180deg)' : ''}`;
-    fc.style.opacity = '0';
-  }
-  const errKey = 'pv_' + card.pv.replace(/\s+/g, '_');
-  if (known) {
-    pvFlashKnown.push(card);
-    if (pvErrors[errKey]) { delete pvErrors[errKey]; savePVErrors(); }
-  } else {
-    pvFlashUnknown.push(card);
-    pvErrors[errKey] = { pv: card.pv, tr: card.tr.split('\n')[0], unit: card._unit };
-    savePVErrors();
-  }
-  setTimeout(() => { pvFlashIdx++; renderPVFlash(); }, 370);
-}
-
-function renderPVFlashResult() {
-  const s = document.getElementById('screen-phrasal-flash');
-  const known = pvFlashKnown.length, total = pvFlashCards.length;
-  s.innerHTML = `
-    <div class="result-wrap">
-      <div class="result-emoji">${known === total ? '🏆' : known > total / 2 ? '💪' : '📚'}</div>
-      <div class="result-title">${known === total ? 'Mükemmel!' : 'Sonuçlar'}</div>
-      <div class="result-sub">${total} karttan ${known} tanesini bildiniz</div>
-      <div class="stat-row">
-        <div class="stat-box"><div class="stat-num" style="color:var(--success)">${known}</div><div class="stat-lbl">Bildim ✓</div></div>
-        <div class="stat-box"><div class="stat-num" style="color:var(--error)">${pvFlashUnknown.length}</div><div class="stat-lbl">Bilmedim ✗</div></div>
-      </div>
-      ${pvFlashUnknown.length > 0 ? `<button class="result-btn" onclick="pvFlashCards=shuffle([...pvFlashUnknown]);pvFlashIdx=0;pvFlashKnown=[];pvFlashUnknown=[];renderPVFlash()">🔁 Bilemediklerimi Tekrar Et</button>` : ''}
-      <button class="result-btn" onclick="startPVFlash()">🔀 Yeniden Başla</button>
-      <button class="result-btn outline" onclick="showPhrasalVerbs(pvCurrentUnit||1)">← Geri Dön</button>
-    </div>`;
-}
+// PV Flash uses the same swipeCard/flipCard as regular flash
+// See startPVFlash above for the unified entry point
 
 // ===== PV MULTIPLE CHOICE =====
 let pvQuizCards = [], pvQuizIdx = 0, pvQuizScore = 0;
@@ -2261,28 +2165,84 @@ function toggleLearnMeta(el) {
    XP TABLOSU
    ─────────────────────────────────────────────────────────────── */
 const XP_REWARDS = {
-  flash_correct: 8,    // flash kart → Bildim
-  mc_correct: 10,   // çoktan seçmeli doğru
-  fib_correct: 15,   // boşluk doldurma doğru (yazarak)
-  syn_correct: 10,   // eş anlam quiz doğru
-  ant_correct: 10,   // zıt anlam quiz doğru
-  pv_flash_correct: 10,   // phrasal verb flash doğru
-  pv_quiz_correct: 12,   // phrasal verb quiz doğru
-  mark_learned: 5,    // sözlükten "Öğrendim" butonu
+  flash_correct: 8,
+  mc_correct: 10,
+  fib_correct: 15,
+  syn_correct: 10,
+  ant_correct: 10,
+  pv_flash_correct: 10,
+  pv_quiz_correct: 12,
+  mark_learned: 5,
 };
 
-const LEVEL_THRESHOLDS = [
-  0, 100, 250, 450, 700, 1000,
-  1350, 1750, 2200, 2700, 3300,
-  4000, 4800, 5700, 6700, 8000
+/* ────────────────────────────────────────────────────────────────
+   INFINITE LEVEL SYSTEM — formula-based, no hard-coded limits
+   Level N requires: baseXP * growth^(N-1)
+   baseXP = 100, growth = 1.25
+   ─────────────────────────────────────────────────────────────── */
+const LV_BASE = 100;
+const LV_GROWTH = 1.25;
+
+function _getXPForLevel(level) {
+  if (level <= 1) return 0;
+  return Math.floor(LV_BASE * Math.pow(LV_GROWTH, level - 1));
+}
+
+function _getLevelForXP(xp) {
+  let lvl = 0;
+  while (_getXPForLevel(lvl + 1) <= xp) lvl++;
+  return lvl;
+}
+
+function _getXPProgress(xp) {
+  const lvl = _getLevelForXP(xp);
+  const cur = _getXPForLevel(lvl);
+  const next = _getXPForLevel(lvl + 1);
+  const diff = next - cur;
+  const progress = Math.max(0, xp - cur);
+  return {
+    pct: diff > 0 ? Math.round((progress / diff) * 100) : 100,
+    current: progress,
+    needed: diff,
+    lvl,
+    nextXP: next
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────
+   INFINITE LEVEL NAMES — cycles every 10 levels with theme tiers
+   ─────────────────────────────────────────────────────────────── */
+const LV_TIERS = [
+  ['Çaylak', 'Meraklı', 'Öğrenci', 'Çalışkan', 'Başarılı', 'Uzman', 'Usta', 'Scholar', 'Akademik', 'Profesör'],
+  ['Savaşçı', 'Knight', 'Paladin', 'Şövalye', 'Muhafız', 'Koruyucu', 'Kale', 'Zırh', 'Kalkan', 'Miğfer'],
+  ['Büyücü', 'Wizard', 'Mage', 'Bjorn', 'Storm', 'Bolt', 'Aegis', 'Nova', 'Rune', 'Sage'],
+  ['Efsane', 'Champion', 'Legend', 'Mythic', 'Titan', 'Colossus', 'Behemoth', 'Leviathan', 'Phoenix', 'Dragon'],
+  ['Cosmos', 'Nebula', 'Quasar', 'Pulsar', 'Astro', 'Lunar', 'Solar', 'Zenith', 'Apex', 'Omega'],
+  ['Infinity', 'Eternal', 'Boundless', 'Timeless', 'Infinite', 'Absolute', 'Supreme', 'Omni', 'Prime', 'Ultra'],
 ];
 
-const LEVEL_NAMES = [
-  'Çaylak', 'Meraklı', 'Öğrenci', 'Çalışkan',
-  'Başarılı', 'Uzman', 'Usta', 'Scholar',
-  'Akademik', 'Profesör', 'Genius', 'Legend',
-  'Polyglot', 'Mastermind', 'YDT Champion', 'MARVEL ✦'
-];
+function _getLevelName(level) {
+  const tierIdx = Math.floor(level / 10);
+  const posIdx = level % 10;
+  const tierName = LV_TIERS[tierIdx % LV_TIERS.length];
+  const rankName = tierName[posIdx];
+  const suffix = tierIdx > 0 ? ` ${_toRoman(tierIdx + 1)}` : '';
+  return `${rankName}${suffix}`;
+}
+
+function _toRoman(n) {
+  const romanMap = [
+    ['X', 10], ['IX', 9], ['V', 5], ['IV', 4], ['I', 1]
+  ];
+  let result = '';
+  for (const [roman, value] of romanMap) {
+    while (n >= value) {
+      result += roman;
+      n -= value;
+    }
+  }
+  return result || '0';
+}
 
 /* ────────────────────────────────────────────────────────────────
    STREAK ROZETLERI
@@ -2333,7 +2293,7 @@ function _updateComboUI() {
   }
   const mult = _getComboMultiplier();
   const comboData = COMBO_THRESHOLDS.find(t => t.count === _comboCount) || COMBO_THRESHOLDS[COMBO_THRESHOLDS.length - 1];
-  
+
   if (!existing) {
     existing = document.createElement('div');
     existing.id = 'combo-indicator';
@@ -2347,6 +2307,9 @@ function _incrementCombo() {
   _comboCount++;
   _comboMultiplier = _getComboMultiplier();
   _updateComboUI();
+  if (_comboCount >= 5) {
+    _trackQuestStat('combo5', true);
+  }
 }
 
 function _resetCombo() {
@@ -2377,6 +2340,9 @@ const ACHIEVEMENTS = [
   { id: 'level_5', icon: '⭐', name: 'Yıldız', desc: 'Seviye 5\'e ulaş', category: 'level' },
   { id: 'level_10', icon: '🌙', name: 'Dolunay', desc: 'Seviye 10\'a ulaş', category: 'level' },
   { id: 'level_15', icon: '☀️', name: 'Güneş', desc: 'Seviye 15\'e ulaş', category: 'level' },
+  { id: 'level_20', icon: '🚀', name: 'Yörünge', desc: 'Seviye 20\'ye ulaş', category: 'level' },
+  { id: 'level_30', icon: '🌌', name: 'Galaksi', desc: 'Seviye 30\'a ulaş', category: 'level' },
+  { id: 'level_50', icon: '💫', name: 'Kozmos', desc: 'Seviye 50\'ye ulaş', category: 'level' },
   { id: 'combo_5', icon: '🔥', name: 'Sıcak Seri', desc: '5\'li combo yap', category: 'combo' },
   { id: 'combo_10', icon: '💥', name: 'Patlama', desc: '10\'lu combo yap', category: 'combo' },
   { id: 'combo_20', icon: '⚡', name: 'Şimşek', desc: '20\'li combo yap', category: 'combo' },
@@ -2432,6 +2398,9 @@ function _checkAchievements() {
     level_5: _getLevelForXP(_xpData.xp) >= 5,
     level_10: _getLevelForXP(_xpData.xp) >= 10,
     level_15: _getLevelForXP(_xpData.xp) >= 15,
+    level_20: _getLevelForXP(_xpData.xp) >= 20,
+    level_30: _getLevelForXP(_xpData.xp) >= 30,
+    level_50: _getLevelForXP(_xpData.xp) >= 50,
     combo_5: _comboCount >= 5,
     combo_10: _comboCount >= 10,
     combo_20: _comboCount >= 20,
@@ -2444,7 +2413,7 @@ function _checkAchievements() {
     freeze_first: _streakFreezeUsed > 0,
     quest_complete_10: (_questData?.completedCount || 0) >= 10,
   };
-  
+
   for (const [id, isEarned] of Object.entries(checks)) {
     if (isEarned && !earned.includes(id)) {
       earned.push(id);
@@ -2479,17 +2448,17 @@ function _showAchievementToast(achievement) {
 function _renderAchievementsInStats(container) {
   const existing = container.querySelector('.gm-achievements-block');
   if (existing) existing.remove();
-  
+
   const block = document.createElement('div');
   block.className = 'gm-achievements-block';
-  
+
   const earned = _achievementData.earned;
   const total = ACHIEVEMENTS.length;
   const pct = Math.round((earned.length / total) * 100);
-  
+
   const cats = ['learning', 'streak', 'level', 'combo', 'custom', 'sr', 'quest', 'special'];
   const catNames = { learning: '📚 Kelime', streak: '🔥 Seri', level: '⭐ Seviye', combo: '💥 Combo', custom: '✏️ Özel', sr: '🧠 SR', quest: '📋 Görev', special: '🏆 Özel' };
-  
+
   let html = `
     <div class="gm-achievements-header">
       <div class="gm-achievements-title">🏆 Başarılar</div>
@@ -2497,7 +2466,7 @@ function _renderAchievementsInStats(container) {
     </div>
     <div class="gm-achievements-grid">
   `;
-  
+
   for (const ach of ACHIEVEMENTS) {
     const isEarned = earned.includes(ach.id);
     html += `<div class="gm-achievement-chip ${isEarned ? 'earned' : 'locked'}" title="${ach.desc}">
@@ -2505,7 +2474,7 @@ function _renderAchievementsInStats(container) {
       <span class="gm-achievement-name">${ach.name}</span>
     </div>`;
   }
-  
+
   html += '</div>';
   block.innerHTML = html;
   container.insertBefore(block, container.lastElementChild);
@@ -2602,10 +2571,10 @@ function _renderQuestsInHome() {
   _initDailyQuests();
   const container = document.getElementById('quest-home-card');
   if (!container) return;
-  
+
   const completed = _questData.completed.length;
   const total = _questData.active.length;
-  
+
   container.innerHTML = `
     <div class="quest-header">
       <div class="quest-title">📋 Günlük Görevler</div>
@@ -2613,13 +2582,13 @@ function _renderQuestsInHome() {
     </div>
     <div class="quest-list">
       ${_questData.active.map(q => {
-        const isDone = _questData.completed.includes(q.id);
-        return `<div class="quest-item ${isDone ? 'done' : ''}">
+    const isDone = _questData.completed.includes(q.id);
+    return `<div class="quest-item ${isDone ? 'done' : ''}">
           <span class="quest-icon">${isDone ? '✅' : q.icon}</span>
           <span class="quest-name">${q.name}</span>
           <span class="quest-xp">+${q.xp} XP</span>
         </div>`;
-      }).join('')}
+  }).join('')}
     </div>
   `;
 }
@@ -2675,13 +2644,13 @@ function _getStreakFreezeCount() {
 function _updateStreakWithFreeze() {
   const today = _todayStr();
   const last = _streakData.lastDate;
-  
+
   if (last === today) return false;
-  
+
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const yStr = yesterday.toISOString().slice(0, 10);
-  
+
   if (last === yStr) {
     _streakData.streak++;
   } else if (last !== today) {
@@ -2694,14 +2663,14 @@ function _updateStreakWithFreeze() {
     }
     _streakData.streak = 1;
   }
-  
+
   _streakData.lastDate = today;
   if (_streakData.streak > (_streakData.longest || 0)) {
     _streakData.longest = _streakData.streak;
   }
   _saveStreak();
   _earnStreakFreeze();
-  
+
   const badge = STREAK_BADGES.slice().reverse().find(b => _streakData.streak === b.days);
   if (badge) {
     setTimeout(() => _showStreakBadge(badge), 600);
@@ -2710,36 +2679,8 @@ function _updateStreakWithFreeze() {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   LEVEL HELPERS
-   ─────────────────────────────────────────────────────────────── */
-function _getLevelForXP(xp) {
-  let lvl = 0;
-  for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
-    if (xp >= LEVEL_THRESHOLDS[i]) lvl = i;
-    else break;
-  }
-  return lvl;
-}
-
-function _getXPProgress(xp) {
-  const lvl = _getLevelForXP(xp);
-  const cur = LEVEL_THRESHOLDS[lvl] || 0;
-  const next = LEVEL_THRESHOLDS[lvl + 1];
-  if (!next) return { pct: 100, current: xp - cur, needed: 0 };
-  return {
-    pct: Math.round(((xp - cur) / (next - cur)) * 100),
-    current: xp - cur,
-    needed: next - cur
-  };
-}
-
-/* ────────────────────────────────────────────────────────────────
    STREAK LOGIC
    ─────────────────────────────────────────────────────────────── */
-function _todayStr() {
-  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
-}
-
 function _updateStreak() {
   const today = _todayStr();
   const last = _streakData.lastDate;
@@ -2776,7 +2717,7 @@ function _updateStreak() {
 function earnXP(type, anchorEl) {
   const baseAmount = XP_REWARDS[type] || 5;
   const prevLevel = _getLevelForXP(_xpData.xp);
-  
+
   // Combo multiplier uygula
   const multiplier = _getComboMultiplier();
   const amount = Math.round(baseAmount * multiplier);
@@ -2802,7 +2743,7 @@ function earnXP(type, anchorEl) {
   _incrementCombo();
   _checkQuests();
   _checkAchievements();
-  
+
   // HUD güncelle
   _renderHUD();
 }
@@ -2843,6 +2784,9 @@ function _incrementGoal() {
   _goalData.count = Math.min(_goalData.count + 1, _goalData.target * 2);
   _saveGoal();
   _renderGoalCard();
+  if (_goalData.count >= _goalData.target) {
+    _trackQuestStat('goalCompleted', true);
+  }
 }
 
 function _renderGoalCard() {
@@ -3002,7 +2946,7 @@ function _showLevelUp(level) {
         <div class="gm-levelup-stars">✦ ✦ ✦</div>
         <div class="gm-levelup-label">SEVİYE ATLANDI!</div>
         <div class="gm-levelup-num">Seviye ${level}</div>
-        <div class="gm-levelup-name">${LEVEL_NAMES[level] || 'Efsane'}</div>
+        <div class="gm-levelup-name">${_getLevelName(level)}</div>
         <div class="gm-levelup-xp">${_xpData.xp} XP</div>
         <button class="gm-levelup-btn" onclick="this.closest('.gm-levelup-overlay').remove()">Harika! 🎉</button>
       </div>
@@ -3133,7 +3077,7 @@ function _injectXPStats() {
       <div class="gm-stats-xp-row">
         <div class="gm-stats-xp-card">
           <div class="gm-stats-xp-level">Seviye ${lvl}</div>
-          <div class="gm-stats-xp-name">${LEVEL_NAMES[lvl] || ''}</div>
+          <div class="gm-stats-xp-name">${_getLevelName(lvl)}</div>
           <div class="gm-stats-xp-total">${_xpData.xp} XP</div>
           <div class="gm-stats-bar-wrap">
             <div class="gm-stats-bar-fill" style="width:${prog.pct}%"></div>
@@ -3186,28 +3130,30 @@ window.swipeCard = function (dir) {
     : document.getElementById('btn-wrong');
   if (dir === 'right') {
     earnXP('flash_correct', btn);
+    _trackQuestStat('cardsFlipped');
   } else {
-    try { _shakeElement(document.getElementById('fc')); } catch(e) {}
+    _resetCombo();
+    try { _shakeElement(document.getElementById('fc')); } catch (e) { }
   }
   _origSwipeCard(dir);
 };
 
 // -- MC doğru/yanlış --
-const _origPickMC = window.pickMC;
-window.pickMC = function (chosen, correct, meaning, backFn, titleOverride) {
-  const btn = [...document.querySelectorAll('.mc-opt')].find(b => b.textContent.trim() === chosen);
+const _origCheckMC = window.checkMC;
+window.checkMC = function (btn, chosen, correct, meaning, backFn, titleOverride) {
   if (chosen === correct || chosen === meaning) {
     _triggerCorrect(btn, 'mc_correct');
+    _trackQuestStat('mcCorrect');
   } else {
     _triggerWrong(btn);
   }
-  _origPickMC(chosen, correct, meaning, backFn, titleOverride);
+  _origCheckMC(btn, chosen, correct, meaning, backFn, titleOverride);
 };
 
 // -- FIB doğru/yanlış --
 const _origCheckFIB = window.checkFIB;
 window.checkFIB = function () {
-  const inp = document.getElementById('fib-input');
+  const inp = document.getElementById('fib-inp');
   const answer = inp ? inp.value.trim().toLowerCase() : '';
   const correct = currentCards[cardIndex] ? currentCards[cardIndex][0].toLowerCase() : '';
   const isCorrect = answer === correct || answer === correct + 's' || correct === answer + 's'
@@ -3215,6 +3161,7 @@ window.checkFIB = function () {
 
   if (isCorrect) {
     _triggerCorrect(inp, 'fib_correct');
+    _trackQuestStat('fibCorrect');
   } else {
     _triggerWrong(inp);
   }
@@ -3222,26 +3169,30 @@ window.checkFIB = function () {
 };
 
 // -- Syn Quiz --
-const _origPickSyn = window.pickSyn;
-if (_origPickSyn) {
-  window.pickSyn = function (chosen, correct, backFn) {
-    const btns = document.querySelectorAll('.mc-opt');
-    const btn = [...btns].find(b => b.textContent.trim() === chosen);
-    if (chosen === correct) _triggerCorrect(btn, 'syn_correct');
-    else _triggerWrong(btn);
-    _origPickSyn(chosen, correct, backFn);
+const _origCheckSynQuiz = window.checkSynQuiz;
+if (_origCheckSynQuiz) {
+  window.checkSynQuiz = function (btn, chosen, correct) {
+    if (chosen === correct) {
+      _triggerCorrect(btn, 'syn_correct');
+      _trackQuestStat('mcCorrect');
+    } else {
+      _triggerWrong(btn);
+    }
+    _origCheckSynQuiz(btn, chosen, correct);
   };
 }
 
 // -- Ant Quiz --
-const _origPickAnt = window.pickAnt;
-if (_origPickAnt) {
-  window.pickAnt = function (chosen, correct, backFn) {
-    const btns = document.querySelectorAll('.mc-opt');
-    const btn = [...btns].find(b => b.textContent.trim() === chosen);
-    if (chosen === correct) _triggerCorrect(btn, 'ant_correct');
-    else _triggerWrong(btn);
-    _origPickAnt(chosen, correct, backFn);
+const _origCheckAntQuiz = window.checkAntQuiz;
+if (_origCheckAntQuiz) {
+  window.checkAntQuiz = function (btn, chosen, correct) {
+    if (chosen === correct) {
+      _triggerCorrect(btn, 'ant_correct');
+      _trackQuestStat('mcCorrect');
+    } else {
+      _triggerWrong(btn);
+    }
+    _origCheckAntQuiz(btn, chosen, correct);
   };
 }
 
@@ -3850,7 +3801,7 @@ function _sm2Update(word, q) {
   let { ef, interval, reps } = card;
 
   if (q >= 3) {
-    // Doğru cevap
+    // Doğru cevap — interval artır, reps artır, EF güncelle
     if (reps === 0) {
       interval = 1;
     } else if (reps === 1) {
@@ -3859,19 +3810,17 @@ function _sm2Update(word, q) {
       interval = Math.round(interval * ef);
     }
     reps += 1;
+    ef = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+    if (ef < 1.3) ef = 1.3;
   } else {
-    // Yanlış cevap — sıfırla
+    // Yanlış cevap — reps sıfırla, interval düşür, EF sabit kalır
     reps = 0;
     interval = 1;
+    // EF değişmez — SM-2'de EF sadece doğru cevapta güncellenir
   }
 
-  // EF güncelle: EF' = EF + (0.1 - (5-q)*(0.08 + (5-q)*0.02))
-  ef = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
-  if (ef < 1.3) ef = 1.3;
-
-  const due = _srDatePlusDays(interval);
-
-  _srData[word] = { ef: parseFloat(ef.toFixed(3)), interval, reps, due };
+const due = _srDatePlusDays(interval);
+  _srData[word] = { ef: parseFloat(ef.toFixed(3)), interval, reps, due, last: _srToday() };
   _srSave();
 }
 
@@ -3953,9 +3902,9 @@ function _srUpdateHomeCard() {
   const today = _srToday();
 
   // Bugün tamamlanan tekrar sayısını hesapla
+  // "last" field'ı bugün ise bugün çalışıldı demektir
   const doneToday = Object.values(_srData).filter(c => {
-    // Son güncelleme bugünden sonra ise bugün çalışıldı demektir
-    return c.due > today && c.reps > 0;
+    return (c.last || '') === today && c.reps > 0;
   }).length;
 
   if (total === 0 && newCount === 0) {
@@ -4103,9 +4052,11 @@ function renderSRFlash() {
       <span style="font-size:10px;color:var(--text3)">sürükle veya bas</span>
       <div class="flash-guide-item"><span style="color:var(--success)">Bildim →</span><div class="flash-guide-dot" style="background:var(--success)"></div></div>
     </div>
-    <div class="swipe-btn-row">
+    <div class="sr-quality-row">
+      <button class="sr-quality-btn hard" onclick="srSwipe('hard')">😓 Zor</button>
       <button class="swipe-btn wrong" id="btn-wrong" onclick="srSwipe('wrong')">✗ Bilmedim</button>
       <button class="swipe-btn right" id="btn-right" onclick="srSwipe('good')">✓ Bildim</button>
+      <button class="sr-quality-btn easy" onclick="srSwipe('easy')">💡 Kolay</button>
     </div>
   </div>`;
 
@@ -4116,16 +4067,16 @@ function renderSRFlash() {
 function srSwipe(quality) {
   if (_fcSwiping) return;
   _fcSwiping = true;
-  
+
   const fc = document.getElementById('fc');
   if (!fc) { _fcSwiping = false; return; }
-  
+
   if (!currentCards || currentCards.length === 0 || cardIndex >= currentCards.length) {
     _fcSwiping = false;
     renderSRResult();
     return;
   }
-  
+
   const word = currentCards[cardIndex];
   if (!word || !word[0]) {
     _fcSwiping = false;
@@ -4159,16 +4110,20 @@ function srSwipe(quality) {
     markLearned(unit, word[0]);
     delete errorBox['u' + unit + '_' + word[0]];
     saveErrors();
+    _trackQuestStat('srReviews');
     if (typeof earnXP === 'function') earnXP('flash_correct', document.getElementById('btn-right'));
   } else {
     unknown.push(word);
+    markUnlearned(unit, word[0]);
     errorBox['u' + unit + '_' + word[0]] = { word: word[0], meaning: word[1], unit };
     saveErrors();
+    _resetCombo();
   }
 
   setTimeout(() => {
     _fcSwiping = false;
     cardIndex++;
+    _trackQuestStat('cardsFlipped');
     if (cardIndex >= currentCards.length) {
       renderSRResult();
     } else {
@@ -4595,7 +4550,7 @@ function _renderSpeedQ() {
   _clearSpeedTimer();
   const s = document.getElementById('screen-speed');
   if (!s) return;
-  
+
   if (!_spCards || _spCards.length === 0 || _spIdx >= _spCards.length) {
     _renderSpeedResult();
     return;
@@ -4660,7 +4615,7 @@ function _freezeTimer() {
 function checkSpeedQ(btn, chosen, correct, meaning) {
   if (_spAnswered) return;
   if (!_spCards || _spIdx >= _spCards.length) return;
-  
+
   _spAnswered = true;
   _clearSpeedTimer();
   _freezeTimer();
@@ -4717,7 +4672,7 @@ function checkSpeedQ(btn, chosen, correct, meaning) {
 function _timeoutSpeedQ() {
   if (_spAnswered) return;
   if (!_spCards || _spIdx >= _spCards.length) return;
-  
+
   _spAnswered = true;
   _freezeTimer();
   const word = _spCards[_spIdx];
@@ -4845,8 +4800,13 @@ window.startSpeedMode = startSpeedMode;
 window.checkSpeedQ = checkSpeedQ;
 
 // Run
-initTheme(); 
+initTheme();
 renderHome();
+
+window.addEventListener('scroll', () => {
+  const sw = document.querySelector('.global-search-wrap');
+  if (sw) sw.classList.toggle('scrolled', window.scrollY > 8);
+}, { passive: true });
 _initDailyQuests();
 _renderQuestsInHome();
 updateErrorBadge();
@@ -4855,23 +4815,23 @@ _checkAchievements();
 // Onboarding (first time only)
 const onboardingDone = localStorage.getItem('ydt_onboarding_done');
 if (!onboardingDone) {
-    setTimeout(() => _showOnboarding(), 800);
+  setTimeout(() => _showOnboarding(), 800);
 }
 
 /* ────────────────────────────────────────────────────────────────
    PRONUNCIATION (Text-to-Speech)
    ─────────────────────────────────────────────────────────────── */
 function speakWord(word) {
-    if (!('speechSynthesis' in window)) {
-        showToast('Tarayıcı desteklemiyor');
-        return;
-    }
-    const utterance = new SpeechSynthesisUtterance(word);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-    speechSynthesis.cancel();
-    speechSynthesis.speak(utterance);
+  if (!('speechSynthesis' in window)) {
+    showToast('Tarayıcı desteklemiyor');
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(word);
+  utterance.lang = 'en-US';
+  utterance.rate = 0.9;
+  utterance.pitch = 1;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utterance);
 }
 
 window.speakWord = speakWord;
@@ -4880,21 +4840,21 @@ window.speakWord = speakWord;
    ONSBOARDING FLOW
    ─────────────────────────────────────────────────────────────── */
 const ONBOARDING_STEPS = [
-    { icon: '📚', title: 'FDil\'e Hoş Geldin!', desc: 'YDT/DİL sınavı için kelime öğrenme uygulaması. Flash kartlar, testler ve spaced repetition ile etkili öğren.' },
-    { icon: '🃏', title: 'Flash Kartlarla Öğren', desc: 'Kartı sağa kaydır = bildim, sola = bilmedim. Veya kartın üstüne tıkla veya çevir butonuna bas.' },
-    { icon: '⚡', title: 'XP Kazan, Seviye Atla', desc: 'Doğru cevaplar XP kazandırır. Combo yaparsan XP\'nin katlanır! Günlük hedefini tamamla.' },
-    { icon: '🏆', title: 'Başarıları Aç', desc: 'Rozaetleri kazan, görevleri tamamla ve YDT Şampiyonu ol! Öğrenmeye hazır mısın?' },
+  { icon: '📚', title: 'FDil\'e Hoş Geldin!', desc: 'YDT/DİL sınavı için kelime öğrenme uygulaması. Flash kartlar, testler ve spaced repetition ile etkili öğren.' },
+  { icon: '🃏', title: 'Flash Kartlarla Öğren', desc: 'Kartı sağa kaydır = bildim, sola = bilmedim. Veya kartın üstüne tıkla veya çevir butonuna bas.' },
+  { icon: '⚡', title: 'XP Kazan, Seviye Atla', desc: 'Doğru cevaplar XP kazandırır. Combo yaparsan XP\'nin katlanır! Günlük hedefini tamamla.' },
+  { icon: '🏆', title: 'Başarıları Aç', desc: 'Rozaetleri kazan, görevleri tamamla ve YDT Şampiyonu ol! Öğrenmeye hazır mısın?' },
 ];
 
 function _showOnboarding() {
-    let step = 0;
-    
-    const overlay = document.createElement('div');
-    overlay.className = 'onboarding-overlay';
-    
-    function renderStep() {
-        const data = ONBOARDING_STEPS[step];
-        overlay.innerHTML = `
+  let step = 0;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'onboarding-overlay';
+
+  function renderStep() {
+    const data = ONBOARDING_STEPS[step];
+    overlay.innerHTML = `
             <div class="onboarding-card">
                 <div class="onboarding-icon">${data.icon}</div>
                 <div class="onboarding-title">${data.title}</div>
@@ -4906,10 +4866,10 @@ function _showOnboarding() {
                 ${step < ONBOARDING_STEPS.length - 1 ? `<button class="onboarding-skip" onclick="this.closest('.onboarding-overlay').remove(); localStorage.setItem('ydt_onboarding_done', 'true');">Atla</button>` : ''}
             </div>
         `;
-    }
-    
-    renderStep();
-    document.body.appendChild(overlay);
+  }
+
+  renderStep();
+  document.body.appendChild(overlay);
 }
 
 window._showOnboarding = _showOnboarding;
@@ -4918,59 +4878,59 @@ window._showOnboarding = _showOnboarding;
    DATA EXPORT/IMPORT
    ─────────────────────────────────────────────────────────────── */
 function exportAllData() {
-    const data = {
-        version: 1,
-        exportDate: new Date().toISOString(),
-        xp: _xpData,
-        streak: _streakData,
-        goal: _goalData,
-        progress: progressRaw,
-        errors: errorBox,
-        customVocab: customVocab,
-        achievements: _achievementData,
-        quests: { completedCount: _questData.completedCount },
-        sr: typeof srData !== 'undefined' ? srData : {},
-        streakFreeze: _streakFreezeAvailable,
-        streakFreezeUsed: _streakFreezeUsed,
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fdil-backup-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('✓ Veriler dışa aktarıldı!');
+  const data = {
+    version: 1,
+    exportDate: new Date().toISOString(),
+    xp: _xpData,
+    streak: _streakData,
+    goal: _goalData,
+    progress: progressRaw,
+    errors: errorBox,
+    customVocab: customVocab,
+    achievements: _achievementData,
+    quests: { completedCount: _questData.completedCount },
+    sr: typeof srData !== 'undefined' ? srData : {},
+    streakFreeze: _streakFreezeAvailable,
+    streakFreezeUsed: _streakFreezeUsed,
+  };
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `fdil-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✓ Veriler dışa aktarıldı!');
 }
 
 function importData(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const data = JSON.parse(e.target.result);
-            
-            if (data.xp) { _xpData = data.xp; _saveXP(); }
-            if (data.streak) { _streakData = data.streak; _saveStreak(); }
-            if (data.goal) { _goalData = data.goal; _saveGoal(); }
-            if (data.progress) { progressRaw = data.progress; saveProgress(); }
-            if (data.errors) { errorBox = data.errors; saveErrors(); }
-            if (data.customVocab) { customVocab = data.customVocab; saveVocab(); }
-            if (data.achievements) { _achievementData = data.achievements; _saveAchievements(); }
-            if (data.quests) { _questData.date = ''; _questData.completedCount = data.quests.completedCount || 0; _saveQuests(); }
-            if (data.streakFreeze !== undefined) { _streakFreezeAvailable = data.streakFreeze; localStorage.setItem('ydt_streak_freeze', _streakFreezeAvailable); }
-            if (data.streakFreezeUsed !== undefined) { _streakFreezeUsed = data.streakFreezeUsed; localStorage.setItem('ydt_streak_freeze_used', _streakFreezeUsed); }
-            
-            _renderHUD();
-            renderHome();
-            _checkAchievements();
-            showToast('✓ Veriler içe aktarıldı!');
-        } catch (err) {
-            showToast('❌ Dosya geçersiz!');
-            console.error('Import error:', err);
-        }
-    };
-    reader.readAsText(file);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+
+      if (data.xp) { _xpData = data.xp; _saveXP(); }
+      if (data.streak) { _streakData = data.streak; _saveStreak(); }
+      if (data.goal) { _goalData = data.goal; _saveGoal(); }
+      if (data.progress) { progressRaw = data.progress; saveProgress(); }
+      if (data.errors) { errorBox = data.errors; saveErrors(); }
+      if (data.customVocab) { customVocab = data.customVocab; saveVocab(); }
+      if (data.achievements) { _achievementData = data.achievements; _saveAchievements(); }
+      if (data.quests) { _questData.date = ''; _questData.completedCount = data.quests.completedCount || 0; _saveQuests(); }
+      if (data.streakFreeze !== undefined) { _streakFreezeAvailable = data.streakFreeze; localStorage.setItem('ydt_streak_freeze', _streakFreezeAvailable); }
+      if (data.streakFreezeUsed !== undefined) { _streakFreezeUsed = data.streakFreezeUsed; localStorage.setItem('ydt_streak_freeze_used', _streakFreezeUsed); }
+
+      _renderHUD();
+      renderHome();
+      _checkAchievements();
+      showToast('✓ Veriler içe aktarıldı!');
+    } catch (err) {
+      showToast('❌ Dosya geçersiz!');
+      console.error('Import error:', err);
+    }
+  };
+  reader.readAsText(file);
 }
 
 window.exportAllData = exportAllData;
@@ -4980,12 +4940,12 @@ window.importData = importData;
    SETTINGS SCREEN
    ─────────────────────────────────────────────────────────────── */
 function showSettings() {
-    const overlay = document.createElement('div');
-    overlay.className = 'word-modal-overlay';
-    overlay.style.display = 'flex';
-    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-    
-    overlay.innerHTML = `
+  const overlay = document.createElement('div');
+  overlay.className = 'word-modal-overlay';
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
         <div class="word-modal" style="max-height:85vh;overflow-y:auto;">
             <div class="word-modal-handle"></div>
             <div class="word-modal-header" style="padding:16px 24px 0;">
@@ -5063,40 +5023,40 @@ function showSettings() {
             </div>
         </div>
     `;
-    
-    document.body.appendChild(overlay);
+
+  document.body.appendChild(overlay);
 }
 
 window.showSettings = showSettings;
 
 // PWA Install Handler
 window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    pwaInstallable = true;
-    updatePWAInstallUI();
-    showPWAInstallBanner();
+  e.preventDefault();
+  deferredPrompt = e;
+  pwaInstallable = true;
+  updatePWAInstallUI();
+  showPWAInstallBanner();
 });
 
 window.addEventListener('appinstalled', () => {
-    deferredPrompt = null;
-    pwaInstallable = false;
-    updatePWAInstallUI();
-    hidePWAInstallBanner();
-    showToast('🎉 PWA kuruldu! Ana ekrandan açabilirsin');
+  deferredPrompt = null;
+  pwaInstallable = false;
+  updatePWAInstallUI();
+  hidePWAInstallBanner();
+  showToast('🎉 PWA kuruldu! Ana ekrandan açabilirsin');
 });
 
 function showPWAInstallBanner() {
-    if (window.matchMedia('(display-mode: standalone)').matches) return;
-    if (localStorage.getItem('ydt_pwa_banner_dismissed')) return;
-    
-    const existing = document.getElementById('pwa-install-banner');
-    if (existing) return;
-    
-    const banner = document.createElement('div');
-    banner.id = 'pwa-install-banner';
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#628141,#8BAE66);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-family:inherit';
-    banner.innerHTML = `
+  if (window.matchMedia('(display-mode: standalone)').matches) return;
+  if (localStorage.getItem('ydt_pwa_banner_dismissed')) return;
+
+  const existing = document.getElementById('pwa-install-banner');
+  if (existing) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'pwa-install-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#628141,#8BAE66);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-family:inherit';
+  banner.innerHTML = `
         <div style="display:flex;align-items:center;gap:12px;flex:1">
             <span style="font-size:24px">📱</span>
             <div>
@@ -5109,69 +5069,69 @@ function showPWAInstallBanner() {
             <button onclick="dismissPWAInstallBanner()" style="background:rgba(255,255,255,0.2);color:white;border:none;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
         </div>
     `;
-    document.body.appendChild(banner);
+  document.body.appendChild(banner);
 }
 
 function hidePWAInstallBanner() {
-    const banner = document.getElementById('pwa-install-banner');
-    if (banner) banner.remove();
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner) banner.remove();
 }
 
 function dismissPWAInstallBanner() {
-    hidePWAInstallBanner();
-    localStorage.setItem('ydt_pwa_banner_dismissed', '1');
+  hidePWAInstallBanner();
+  localStorage.setItem('ydt_pwa_banner_dismissed', '1');
 }
 
 function updatePWAInstallUI() {
-    setTimeout(() => {
-        const btn = document.getElementById('pwa-install-btn');
-        const status = document.getElementById('pwa-install-status');
-        const help = document.getElementById('pwa-install-help');
-        if (btn) {
-            if (pwaInstallable && deferredPrompt) {
-                btn.style.display = '';
-                btn.textContent = '📲 Kur';
-                if (status) status.textContent = 'Kurulum hazır!';
-            } else if (window.matchMedia('(display-mode: standalone)').matches) {
-                btn.style.display = 'none';
-                if (status) status.textContent = '✓ PWA olarak açık';
-            } else {
-                btn.style.display = 'none';
-                if (status) status.textContent = 'Tarayıcıda açık';
-            }
-        }
-        if (help) {
-            help.style.display = 'block';
-        }
-    }, 100);
+  setTimeout(() => {
+    const btn = document.getElementById('pwa-install-btn');
+    const status = document.getElementById('pwa-install-status');
+    const help = document.getElementById('pwa-install-help');
+    if (btn) {
+      if (pwaInstallable && deferredPrompt) {
+        btn.style.display = '';
+        btn.textContent = '📲 Kur';
+        if (status) status.textContent = 'Kurulum hazır!';
+      } else if (window.matchMedia('(display-mode: standalone)').matches) {
+        btn.style.display = 'none';
+        if (status) status.textContent = '✓ PWA olarak açık';
+      } else {
+        btn.style.display = 'none';
+        if (status) status.textContent = 'Tarayıcıda açık';
+      }
+    }
+    if (help) {
+      help.style.display = 'block';
+    }
+  }, 100);
 }
 
 async function installPWA() {
-    dismissPWAInstallBanner();
-    if (!deferredPrompt) {
-        showToast('PWA kurulumu tarayıcı tarafından desteklenmiyor');
-        return;
-    }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-        showToast('🎉 Kurulum başladı!');
-    }
-    deferredPrompt = null;
-    pwaInstallable = false;
-    updatePWAInstallUI();
+  dismissPWAInstallBanner();
+  if (!deferredPrompt) {
+    showToast('PWA kurulumu tarayıcı tarafından desteklenmiyor');
+    return;
+  }
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') {
+    showToast('🎉 Kurulum başladı!');
+  }
+  deferredPrompt = null;
+  pwaInstallable = false;
+  updatePWAInstallUI();
 }
 
 /* ────────────────────────────────────────────────────────────────
    STATS PANEL - Add Achievements
    ─────────────────────────────────────────────────────────────── */
 const _origRenderStatsContent = window.renderStatsContent;
-window.renderStatsContent = function() {
-    if (_origRenderStatsContent) _origRenderStatsContent();
-    const panel = document.getElementById('stats-panel');
-    if (panel) {
-        _renderAchievementsInStats(panel.querySelector('.stats-panel') || panel);
-    }
+window.renderStatsContent = function () {
+  if (_origRenderStatsContent) _origRenderStatsContent();
+  const panel = document.getElementById('stats-panel');
+  if (panel) {
+    _renderAchievementsInStats(panel.querySelector('.stats-panel') || panel);
+  }
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -5179,203 +5139,203 @@ window.renderStatsContent = function() {
    ═══════════════════════════════════════════════════════════════ */
 
 const GENERAL_WORDS = [
-    'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absolute', 'absorb', 
-    'abstract', 'absurd', 'abundant', 'academic', 'accept', 'access', 'accident', 
-    'accompany', 'accomplish', 'according', 'account', 'accurate', 'achieve', 'acid', 
-    'acquire', 'across', 'action', 'active', 'activity', 'actor', 'actual', 'adapt', 
-    'add', 'addition', 'adequate', 'adjust', 'admire', 'admit', 'adolescent', 'adopt', 
-    'adult', 'advance', 'advantage', 'adventure', 'adverse', 'advertise', 'advice', 
-    'advise', 'affair', 'affect', 'afford', 'afraid', 'after', 'afternoon', 
-    'again', 'against', 'age', 'agency', 'agenda', 'agent', 'aggressive', 'agree', 
-    'agreement', 'ahead', 'aim', 'air', 'aircraft', 'airline', 'airport', 'alarm', 
-    'album', 'alcohol', 'alert', 'alien', 'alike', 'alive', 'allow', 'almost', 
-    'alone', 'along', 'already', 'also', 'alter', 'alternative', 'although', 
-    'always', 'amaze', 'ambition', 'ambitious', 'amend', 'america', 'american', 
-    'among', 'amount', 'ample', 'amuse', 'analyze', 'ancestor', 'ancient', 
-    'anger', 'angle', 'angry', 'animal', 'announce', 'annual', 'another', 'answer', 
-    'anticipate', 'anxiety', 'anxious', 'any', 'anybody', 'anyhow', 'anyone', 
-    'anything', 'anyway', 'anywhere', 'apart', 'apology', 'apparent', 'appeal', 
-    'appear', 'appearance', 'appetite', 'apple', 'apply', 'appoint', 'appointment', 
-    'appreciate', 'approach', 'appropriate', 'approve', 'approximate', 'april', 
-    'architect', 'architecture', 'area', 'argue', 'argument', 'arise', 'arm', 
-    'army', 'around', 'arrange', 'arrangement', 'arrest', 'arrival', 'arrive', 
-    'arrow', 'article', 'artificial', 'artist', 'artistic', 'aside', 'ask', 
-    'asleep', 'aspect', 'assert', 'assess', 'asset', 'assign', 'assist', 
-    'assistance', 'assistant', 'associate', 'association', 'assume', 'assure', 
-    'astonish', 'athlete', 'atmosphere', 'attach', 'attack', 'attain', 'attempt', 
-    'attend', 'attention', 'attitude', 'attorney', 'attract', 'attraction', 
-    'attractive', 'audience', 'august', 'aunt', 'author', 'authority', 'automatic', 
-    'autumn', 'available', 'average', 'avoid', 'await', 'wake', 'walk', 'wall', 
-    'wander', 'want', 'warm', 'warmth', 'warn', 'warning', 'wash', 'waste', 'watch', 
-    'water', 'wave', 'way', 'we', 'weak', 'wealth', 'weapon', 'wear', 'weather', 
-    'wedding', 'wednesday', 'week', 'weekend', 'weekly', 'weigh', 'weight', 'welcome', 
-    'welfare', 'well', 'west', 'western', 'whatever', 'wheat', 'wheel', 'when', 
-    'whenever', 'where', 'whereas', 'wherever', 'whether', 'which', 'while', 
-    'whip', 'whisper', 'white', 'who', 'whoever', 'whole', 'whom', 'whose', 'why', 
-    'wide', 'widely', 'widespread', 'wife', 'wild', 'will', 'willing', 'win', 
-    'wind', 'window', 'wine', 'wing', 'winner', 'winter', 'wipe', 'wire', 
-    'wisdom', 'wise', 'wish', 'with', 'withdraw', 'within', 'without', 'witness', 
-    'woman', 'wonder', 'wonderful', 'wood', 'wooden', 'wool', 'word', 'work', 
-    'worker', 'workplace', 'workshop', 'world', 'worldwide', 'worry', 'worse', 
-    'worship', 'worst', 'worth', 'worthwhile', 'worthy', 'would', 'wound', 
-    'wrap', 'write', 'writer', 'writing', 'wrong', 'yard', 'yeah', 'year', 
-    'yellow', 'yes', 'yesterday', 'yet', 'yield', 'you', 'young', 'your', 
-    'yours', 'yourself', 'youth', 'zero', 'zone'
+  'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absolute', 'absorb',
+  'abstract', 'absurd', 'abundant', 'academic', 'accept', 'access', 'accident',
+  'accompany', 'accomplish', 'according', 'account', 'accurate', 'achieve', 'acid',
+  'acquire', 'across', 'action', 'active', 'activity', 'actor', 'actual', 'adapt',
+  'add', 'addition', 'adequate', 'adjust', 'admire', 'admit', 'adolescent', 'adopt',
+  'adult', 'advance', 'advantage', 'adventure', 'adverse', 'advertise', 'advice',
+  'advise', 'affair', 'affect', 'afford', 'afraid', 'after', 'afternoon',
+  'again', 'against', 'age', 'agency', 'agenda', 'agent', 'aggressive', 'agree',
+  'agreement', 'ahead', 'aim', 'air', 'aircraft', 'airline', 'airport', 'alarm',
+  'album', 'alcohol', 'alert', 'alien', 'alike', 'alive', 'allow', 'almost',
+  'alone', 'along', 'already', 'also', 'alter', 'alternative', 'although',
+  'always', 'amaze', 'ambition', 'ambitious', 'amend', 'america', 'american',
+  'among', 'amount', 'ample', 'amuse', 'analyze', 'ancestor', 'ancient',
+  'anger', 'angle', 'angry', 'animal', 'announce', 'annual', 'another', 'answer',
+  'anticipate', 'anxiety', 'anxious', 'any', 'anybody', 'anyhow', 'anyone',
+  'anything', 'anyway', 'anywhere', 'apart', 'apology', 'apparent', 'appeal',
+  'appear', 'appearance', 'appetite', 'apple', 'apply', 'appoint', 'appointment',
+  'appreciate', 'approach', 'appropriate', 'approve', 'approximate', 'april',
+  'architect', 'architecture', 'area', 'argue', 'argument', 'arise', 'arm',
+  'army', 'around', 'arrange', 'arrangement', 'arrest', 'arrival', 'arrive',
+  'arrow', 'article', 'artificial', 'artist', 'artistic', 'aside', 'ask',
+  'asleep', 'aspect', 'assert', 'assess', 'asset', 'assign', 'assist',
+  'assistance', 'assistant', 'associate', 'association', 'assume', 'assure',
+  'astonish', 'athlete', 'atmosphere', 'attach', 'attack', 'attain', 'attempt',
+  'attend', 'attention', 'attitude', 'attorney', 'attract', 'attraction',
+  'attractive', 'audience', 'august', 'aunt', 'author', 'authority', 'automatic',
+  'autumn', 'available', 'average', 'avoid', 'await', 'wake', 'walk', 'wall',
+  'wander', 'want', 'warm', 'warmth', 'warn', 'warning', 'wash', 'waste', 'watch',
+  'water', 'wave', 'way', 'we', 'weak', 'wealth', 'weapon', 'wear', 'weather',
+  'wedding', 'wednesday', 'week', 'weekend', 'weekly', 'weigh', 'weight', 'welcome',
+  'welfare', 'well', 'west', 'western', 'whatever', 'wheat', 'wheel', 'when',
+  'whenever', 'where', 'whereas', 'wherever', 'whether', 'which', 'while',
+  'whip', 'whisper', 'white', 'who', 'whoever', 'whole', 'whom', 'whose', 'why',
+  'wide', 'widely', 'widespread', 'wife', 'wild', 'will', 'willing', 'win',
+  'wind', 'window', 'wine', 'wing', 'winner', 'winter', 'wipe', 'wire',
+  'wisdom', 'wise', 'wish', 'with', 'withdraw', 'within', 'without', 'witness',
+  'woman', 'wonder', 'wonderful', 'wood', 'wooden', 'wool', 'word', 'work',
+  'worker', 'workplace', 'workshop', 'world', 'worldwide', 'worry', 'worse',
+  'worship', 'worst', 'worth', 'worthwhile', 'worthy', 'would', 'wound',
+  'wrap', 'write', 'writer', 'writing', 'wrong', 'yard', 'yeah', 'year',
+  'yellow', 'yes', 'yesterday', 'yet', 'yield', 'you', 'young', 'your',
+  'yours', 'yourself', 'youth', 'zero', 'zone'
 ];
 
 // generalCache already declared at top
 
 function _saveGeneralCache() {
-    localStorage.setItem('ydt_general_cache', JSON.stringify(generalCache));
+  localStorage.setItem('ydt_general_cache', JSON.stringify(generalCache));
 }
 
 async function fetchWordData(word) {
-    const w = word.toLowerCase().trim();
-    if (generalCache[w]) return generalCache[w];
-    
-    try {
-        const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);
-        if (!response.ok) throw new Error('Not found');
-        
-        const data = await response.json();
-        const entry = data[0];
-        
-        const result = {
-            word: w,
-            phonetic: entry.phonetic || entry.phonetics?.[0]?.text || '',
-            audio: entry.phonetics?.find(p => p.audio)?.audio || '',
-            definitions: [],
-            examples: [],
-            synonyms: [],
-            partOfSpeech: ''
-        };
-        
-        if (entry.meanings && entry.meanings.length > 0) {
-            const meaning = entry.meanings[0];
-            result.partOfSpeech = meaning.partOfSpeech || '';
-            
-            if (meaning.definitions) {
-                for (const def of meaning.definitions.slice(0, 3)) {
-                    result.definitions.push(def.definition);
-                    if (def.example) result.examples.push(def.example);
-                }
-            }
-            
-            if (meaning.synonyms) {
-                result.synonyms = [...new Set(meaning.synonyms.slice(0, 5))];
-            }
+  const w = word.toLowerCase().trim();
+  if (generalCache[w]) return generalCache[w];
+
+  try {
+    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);
+    if (!response.ok) throw new Error('Not found');
+
+    const data = await response.json();
+    const entry = data[0];
+
+    const result = {
+      word: w,
+      phonetic: entry.phonetic || entry.phonetics?.[0]?.text || '',
+      audio: entry.phonetics?.find(p => p.audio)?.audio || '',
+      definitions: [],
+      examples: [],
+      synonyms: [],
+      partOfSpeech: ''
+    };
+
+    if (entry.meanings && entry.meanings.length > 0) {
+      const meaning = entry.meanings[0];
+      result.partOfSpeech = meaning.partOfSpeech || '';
+
+      if (meaning.definitions) {
+        for (const def of meaning.definitions.slice(0, 3)) {
+          result.definitions.push(def.definition);
+          if (def.example) result.examples.push(def.example);
         }
-        
-        generalCache[w] = result;
-        _saveGeneralCache();
-        return result;
-        
-    } catch (error) {
-        console.log('Failed to fetch:', w, error);
-        return null;
+      }
+
+      if (meaning.synonyms) {
+        result.synonyms = [...new Set(meaning.synonyms.slice(0, 5))];
+      }
     }
+
+    generalCache[w] = result;
+    _saveGeneralCache();
+    return result;
+
+  } catch (error) {
+    console.log('Failed to fetch:', w, error);
+    return null;
+  }
 }
 
 // ===== READING =====
 const READING_PASSAGES = [
-    {
-        id: 1,
-        title: "The Coffee Shop",
-        level: "Beginner",
-        text: "Every morning, Sarah walks to the small coffee shop on Main Street. She orders her usual coffee with milk and a croissant. The owner, Mr. Chen, always remembers her order. Sarah likes to sit by the window and watch people passing by. She reads the news on her phone while enjoying her coffee. The shop has a warm and friendly atmosphere. Many regular customers come here to start their day. Sarah has been a customer for three years now.",
-        turkish: "Her sabah Sarah, Main Street'deki küçük kahve dükkanına yürüyerek gider. Her zamanki gibi sütlü kahve ve bir croissant order. Sahibi Bay Chen her zaman siparişini hatırlar. Sarah pencere kenarında oturmayı ve geçen insanları izlemeyi sever. Kahvesini yudumlarken telefonundan haberleri okur. Dükkanın sıcak ve dostça bir atmosferi vardır. Birçok düzenli müşteri buraya günlerine başlamak için gelir. Sarah artık üç yıldır müşteridir.",
-        keywords: ["croissant", "atmosphere", "regular", "customer", "window", "order"]
-    },
-    {
-        id: 2,
-        title: "A Day in the Park",
-        level: "Beginner",
-        text: "Last Sunday, Tom went to the central park with his family. The weather was perfect - sunny with a gentle breeze. They brought a picnic basket full of sandwiches and fruits. Tom's children played on the swings and the slide while their parents sat on the grass. In the afternoon, they rented a boat and rowed around the lake. It was a peaceful and enjoyable day. They promised to come back again soon.",
-        turkish: "Geçen pazar Tom ailesiyle merkezi parka gitti. Hava mükemmeldi - güneşli ve hafif bir esinti vardı. Sandviç ve meyvelerle dolu bir piknik sepeti getirdiler. Tom'un çocukları salıncaklarda ve kaydırakta oynarken, ebeveynleri çimlerin üstünde oturdu. Öğleden sonra bir tekne kiralayıp gölün etrafında kürek çektiler. Barışçıl ve keyifli bir gündü. Yakında tekrar gelmeye söz verdiler.",
-        keywords: ["picnic", "breeze", "swings", "slide", "grass", "row", "peaceful"]
-    },
-    {
-        id: 3,
-        title: "The New Student",
-        level: "Intermediate",
-        text: "When Maria transferred to her new school, she felt nervous and anxious. On her first day, she couldn't find her classroom and arrived late. The teacher asked her to introduce herself in front of the class. She stood up, trembling slightly, and said her name and where she came from. Some students smiled kindly, but others seemed unimpressed. During lunch break, a girl named Emma approached her and offered to show her around. Maria felt relieved and grateful for the friendly welcome.",
-        turkish: "Maria yeni okuluna geçtiğinde, gergin ve endişeli hissetti. İlk gününde sınıfını bulamadı ve geç kaldı. Öğretmen ondan sınıfın önünde kendini tanıtmasını istedi. Hafifçe titreyerek ayağa kalktı ve adını, nereden geldiğini söyledi. Bazı öğrenciler nazikçe gülümsedi, ama diğerleri etkilenmemiş görünüyordu. Teneffüs sırasında Emma adında bir kız ona yaklaştı ve etrafını gezdirmeyi teklif etti. Maria rahatlamış ve nazik karşılaması için minnettar hissetti.",
-        keywords: ["transfer", "nervous", "anxious", "trembling", "relieved", "grateful", "approach"]
-    },
-    {
-        id: 4,
-        title: "The Job Interview",
-        level: "Intermediate",
-        text: "David had been preparing for this job interview for weeks. He researched the company, practiced common questions, and chose his best outfit. When he arrived, the lobby was modern and impressive. The receptionist gave him a form to fill out. After waiting for ten minutes, a woman in a professional suit escorted him to the conference room. The interview lasted about forty-five minutes. They discussed his experience, skills, and career goals. David felt confident about his performance and hoped to receive an offer soon.",
-        turkish: "David haftalardır bu iş görüşmesi için hazırlanıyordu. Şirketi araştırdı, yaygın soruları pratik yaptı ve en iyi kıyafetini seçti. Geldiğinde lobisi modern ve etkileyiciydi. Resepsiyon görevlisi doldurması için ona bir form verdi. On dakika bekledikten sonra, profesyonel bir takım elbise giyen bir kadın onu konferans odasına götürdü. Görüşme yaklaşık kırk beş dakika sürdü. Deneyimini, becerilerini ve kariyer hedeflerini tartıştılar. David performansından emin hissetti ve yakında bir teklif almayı umuyordu.",
-        keywords: ["interview", "lobby", "receptionist", "escort", "conference", "outfit", "confident"]
-    },
-    {
-        id: 5,
-        title: "Learning to Cook",
-        level: "Beginner",
-        text: "Last month, James decided to learn how to cook. He bought a recipe book and went to the grocery store to buy ingredients. His first attempt was a simple pasta dish. He followed the instructions carefully, but the sauce was too salty. He didn't give up. The second time, he used less salt and added some herbs. It tasted much better. Now he cooks for himself every day and even invited his friends for dinner last weekend. They praised his improvement and asked for the recipe.",
-        turkish: "Geçen ay James yemek yapmayı öğrenmeye karar verdi. Bir yemek tarifi kitabı satın aldı ve malzemeler satın almak için markete gitti. İlk denemesi basit bir makarna yemeğiydi. Talimatları dikkatlice takip etti, ama sos çok tuzluydu. Vazgeçmedi. İkinci seferde daha az tuz kullandı ve biraz ot ekledi. Çok daha iyi tattı. Şimdi her gün kendine yemek pişiriyor ve geçen hafta sonu arkadaşlarını akşam yemeğine davet etti. Onlar James'in gelişimini övdüler ve tarif istediler.",
-        keywords: ["recipe", "ingredient", "sauce", "herbs", "improvement", "praise", "attempt"]
-    },
-    {
-        id: 6,
-        title: "The Weekend Plans",
-        level: "Beginner",
-        text: "Sophie was looking forward to the weekend. She made several plans with her friends. On Saturday morning, they were going to the farmers market to buy fresh vegetables and fruits. In the afternoon, they planned to watch a movie at the cinema. Sunday was reserved for a hiking trip in the mountains. Sophie's friend Lisa offered to drive them in her car. They expected the weather to be clear and perfect for outdoor activities. Sophie was excited about spending time with her friends.",
-        turkish: "Sophie hafta sonunu dört gözle bekliyordu. Arkadaşlarıyla birkaç plan yaptı. Cumartesi sabahı, taze sebze ve meyve satın almak için çiftçi pazarına gideceklermiş. Öğleden sonra sinemada film izlemeyi planladılar. Pazar günü dağlarda yürüyüş için ayrıldı. Sophie'nin arkadaşı Lisa arabasıyla onları götürmeyi teklif etti. Hava durumunun açık ve açık hava etkinlikleri için mükemmel olmasını beklediler. Sophie arkadaşlarıyla vakit geçirmek için heyecanlıydı.",
-        keywords: ["farmers market", "vegetables", "hiking", "mountains", "outdoor", "excited", "reserved"]
-    },
-    {
-        id: 7,
-        title: "Moving to a New City",
-        level: "Advanced",
-        text: "Relocating to an unfamiliar city presented numerous challenges for the young professional. She had to find an affordable apartment, establish a reliable transportation system, and build a social network from scratch. The process of searching for housing online proved to be tedious and time-consuming. She scheduled multiple viewings and eventually signed a lease for a modest studio apartment near her workplace. Adjusting to the faster pace of city life required considerable patience and perseverance. Nevertheless, she gradually adapted to her new environment and began to feel a sense of belonging.",
-        turkish: "Genç profesyonel için tanımadığı bir şehre taşınmak çok sayıda zorluk ortaya koydu. Uygun fiyatlı bir daire bulması, güvenilir bir ulaşım sistemi kurması ve sıfırdan bir sosyal ağ oluşturması gerekiyordu. Konut arama süreci yorucu ve zaman alıcıydı. Birçok gösterim planladı ve sonunda iş yerine yakın mütevazi bir stüdyo daire için lease imzaladı. Şehir hayatının daha hızlı temposuna alışmak, oldukça sabır ve azim gerektirdi. Yine de kademeli olarak yeni çevresine uyum sağladı ve bir aidiyet duygusu hissetmeye başladı.",
-        keywords: ["relocating", "numerous", "affordable", "scratch", "tedious", "lease", "perseverance", "belonging"]
-    },
-    {
-        id: 8,
-        title: "The Book Club",
-        level: "Intermediate",
-        text: "Every Thursday evening, a group of literature enthusiasts gathers at the local library to discuss their latest read. The club has been operating for over five years and currently has fifteen members. This month they are analyzing a classic novel by a well-known author. Each member comes prepared with notes and questions to share. The discussions are always lively and thought-provoking. Some members agree on certain interpretations while others offer alternative perspectives. The club promotes a respectful environment where everyone's opinion is valued.",
-        turkish: "Her perşembe akşamı, bir grup edebiyat meraklısı en son okudukları kitabı tartışmak için yerel kütüphanede buluşur. Kulüp beş yıldan fazla süredir faaliyet gösteriyor ve şu anda on beş üyesi var. Bu ay ünlü bir yazarın klasik bir romanını analiz ediyorlar. Her üye paylaşmak için notlar ve sorularla hazırlanır. Tartışmalar her zaman canlı ve düşündürücüdür. Bazı üyeler belirli yorumlar konusunda hemfikirken, diğerleri alternatif perspektifler sunuyor. Kulüp, herkesin fikrinin değerli görüldüğü saygılı bir ortamı teşvik ediyor.",
-        keywords: ["literature", "enthusiast", "analyzing", "interpretations", "alternative", "perspective", "promotes"]
-    },
-    {
-        id: 9,
-        title: "Health and Lifestyle",
-        level: "Intermediate",
-        text: "Modern sedentary lifestyles have contributed to a significant increase in health problems worldwide. Medical experts recommend engaging in regular physical exercise and maintaining a balanced diet. Studies show that people who walk for at least thirty minutes daily experience reduced stress levels and improved sleep quality. Additionally, limiting screen time and taking regular breaks from work can prevent eye strain and back pain. Following these simple guidelines can lead to a healthier and more productive life.",
-        turkish: "Modern hareketsiz yaşam tarzları dünya genelinde sağlık sorunlarının önemli ölçüde artmasına katkıda bulunmuştur. Tıp uzmanları düzenli fiziksel egzersiz yapmayı ve dengeli beslenmeyi öneriyor. Çalışmalar, günde en az otuz dakika yürüyen kişilerin stres seviyelerinde azalma ve uyku kalitesinde iyileşme yaşadığını gösteriyor. Ayrıca, ekran süresini sınırlamak ve işten düzenli molalar vermek göz yorgunluğunu ve sırt ağrısını önleyebilir. Bu basit yönergeleri takip etmek daha sağlıklı ve üretken bir yaşama yol açabilir.",
-        keywords: ["sedentary", "contribute", "balanced diet", "stress", "productive", "guidelines", "prevent"]
-    },
-    {
-        id: 10,
-        title: "Technology and Communication",
-        level: "Advanced",
-        text: "The advent of smartphones has revolutionized the way people communicate and access information. While these devices have undoubtedly enhanced convenience and connectivity, they have also raised concerns about privacy and digital addiction. Many individuals spend excessive hours on social media platforms, often at the expense of real-world interactions. Furthermore, the constant bombardment of notifications can lead to decreased concentration and mental fatigue. Experts suggest implementing digital wellness strategies to maintain a healthy relationship with technology.",
-        turkish: "Akıllı telefonların ortaya çıkışı, insanların iletişim kurma ve bilgiye erişme biçimini devrimleştirdi. Bu cihazlar kuşkusuz kolaylık ve bağlantıyı artırmış olsa da, gizlilik ve dijital bağımlılık konusunda endişeleri de artırmıştır. Birçok kişi gerçek dünya etkileşimleri pahasına sosyal medya platformlarında aşırı saatler geçiriyor. Üstelik sürekli bildiri bombardımanı konsantrasyonun azalmasına ve zihinsel yorgunluğa yol açabilir. Uzmanlar teknolojiyle sağlıklı bir ilişki sürdürmek için dijital sağlık stratejileri uygulamayı öneriyor.",
-        keywords: ["advent", "revolutionized", "undoubtedly", "connectivity", "bombardment", "fatigue", "wellness"]
-    }
+  {
+    id: 1,
+    title: "The Coffee Shop",
+    level: "Beginner",
+    text: "Every morning, Sarah walks to the small coffee shop on Main Street. She orders her usual coffee with milk and a croissant. The owner, Mr. Chen, always remembers her order. Sarah likes to sit by the window and watch people passing by. She reads the news on her phone while enjoying her coffee. The shop has a warm and friendly atmosphere. Many regular customers come here to start their day. Sarah has been a customer for three years now.",
+    turkish: "Her sabah Sarah, Main Street'deki küçük kahve dükkanına yürüyerek gider. Her zamanki gibi sütlü kahve ve bir croissant order. Sahibi Bay Chen her zaman siparişini hatırlar. Sarah pencere kenarında oturmayı ve geçen insanları izlemeyi sever. Kahvesini yudumlarken telefonundan haberleri okur. Dükkanın sıcak ve dostça bir atmosferi vardır. Birçok düzenli müşteri buraya günlerine başlamak için gelir. Sarah artık üç yıldır müşteridir.",
+    keywords: ["croissant", "atmosphere", "regular", "customer", "window", "order"]
+  },
+  {
+    id: 2,
+    title: "A Day in the Park",
+    level: "Beginner",
+    text: "Last Sunday, Tom went to the central park with his family. The weather was perfect - sunny with a gentle breeze. They brought a picnic basket full of sandwiches and fruits. Tom's children played on the swings and the slide while their parents sat on the grass. In the afternoon, they rented a boat and rowed around the lake. It was a peaceful and enjoyable day. They promised to come back again soon.",
+    turkish: "Geçen pazar Tom ailesiyle merkezi parka gitti. Hava mükemmeldi - güneşli ve hafif bir esinti vardı. Sandviç ve meyvelerle dolu bir piknik sepeti getirdiler. Tom'un çocukları salıncaklarda ve kaydırakta oynarken, ebeveynleri çimlerin üstünde oturdu. Öğleden sonra bir tekne kiralayıp gölün etrafında kürek çektiler. Barışçıl ve keyifli bir gündü. Yakında tekrar gelmeye söz verdiler.",
+    keywords: ["picnic", "breeze", "swings", "slide", "grass", "row", "peaceful"]
+  },
+  {
+    id: 3,
+    title: "The New Student",
+    level: "Intermediate",
+    text: "When Maria transferred to her new school, she felt nervous and anxious. On her first day, she couldn't find her classroom and arrived late. The teacher asked her to introduce herself in front of the class. She stood up, trembling slightly, and said her name and where she came from. Some students smiled kindly, but others seemed unimpressed. During lunch break, a girl named Emma approached her and offered to show her around. Maria felt relieved and grateful for the friendly welcome.",
+    turkish: "Maria yeni okuluna geçtiğinde, gergin ve endişeli hissetti. İlk gününde sınıfını bulamadı ve geç kaldı. Öğretmen ondan sınıfın önünde kendini tanıtmasını istedi. Hafifçe titreyerek ayağa kalktı ve adını, nereden geldiğini söyledi. Bazı öğrenciler nazikçe gülümsedi, ama diğerleri etkilenmemiş görünüyordu. Teneffüs sırasında Emma adında bir kız ona yaklaştı ve etrafını gezdirmeyi teklif etti. Maria rahatlamış ve nazik karşılaması için minnettar hissetti.",
+    keywords: ["transfer", "nervous", "anxious", "trembling", "relieved", "grateful", "approach"]
+  },
+  {
+    id: 4,
+    title: "The Job Interview",
+    level: "Intermediate",
+    text: "David had been preparing for this job interview for weeks. He researched the company, practiced common questions, and chose his best outfit. When he arrived, the lobby was modern and impressive. The receptionist gave him a form to fill out. After waiting for ten minutes, a woman in a professional suit escorted him to the conference room. The interview lasted about forty-five minutes. They discussed his experience, skills, and career goals. David felt confident about his performance and hoped to receive an offer soon.",
+    turkish: "David haftalardır bu iş görüşmesi için hazırlanıyordu. Şirketi araştırdı, yaygın soruları pratik yaptı ve en iyi kıyafetini seçti. Geldiğinde lobisi modern ve etkileyiciydi. Resepsiyon görevlisi doldurması için ona bir form verdi. On dakika bekledikten sonra, profesyonel bir takım elbise giyen bir kadın onu konferans odasına götürdü. Görüşme yaklaşık kırk beş dakika sürdü. Deneyimini, becerilerini ve kariyer hedeflerini tartıştılar. David performansından emin hissetti ve yakında bir teklif almayı umuyordu.",
+    keywords: ["interview", "lobby", "receptionist", "escort", "conference", "outfit", "confident"]
+  },
+  {
+    id: 5,
+    title: "Learning to Cook",
+    level: "Beginner",
+    text: "Last month, James decided to learn how to cook. He bought a recipe book and went to the grocery store to buy ingredients. His first attempt was a simple pasta dish. He followed the instructions carefully, but the sauce was too salty. He didn't give up. The second time, he used less salt and added some herbs. It tasted much better. Now he cooks for himself every day and even invited his friends for dinner last weekend. They praised his improvement and asked for the recipe.",
+    turkish: "Geçen ay James yemek yapmayı öğrenmeye karar verdi. Bir yemek tarifi kitabı satın aldı ve malzemeler satın almak için markete gitti. İlk denemesi basit bir makarna yemeğiydi. Talimatları dikkatlice takip etti, ama sos çok tuzluydu. Vazgeçmedi. İkinci seferde daha az tuz kullandı ve biraz ot ekledi. Çok daha iyi tattı. Şimdi her gün kendine yemek pişiriyor ve geçen hafta sonu arkadaşlarını akşam yemeğine davet etti. Onlar James'in gelişimini övdüler ve tarif istediler.",
+    keywords: ["recipe", "ingredient", "sauce", "herbs", "improvement", "praise", "attempt"]
+  },
+  {
+    id: 6,
+    title: "The Weekend Plans",
+    level: "Beginner",
+    text: "Sophie was looking forward to the weekend. She made several plans with her friends. On Saturday morning, they were going to the farmers market to buy fresh vegetables and fruits. In the afternoon, they planned to watch a movie at the cinema. Sunday was reserved for a hiking trip in the mountains. Sophie's friend Lisa offered to drive them in her car. They expected the weather to be clear and perfect for outdoor activities. Sophie was excited about spending time with her friends.",
+    turkish: "Sophie hafta sonunu dört gözle bekliyordu. Arkadaşlarıyla birkaç plan yaptı. Cumartesi sabahı, taze sebze ve meyve satın almak için çiftçi pazarına gideceklermiş. Öğleden sonra sinemada film izlemeyi planladılar. Pazar günü dağlarda yürüyüş için ayrıldı. Sophie'nin arkadaşı Lisa arabasıyla onları götürmeyi teklif etti. Hava durumunun açık ve açık hava etkinlikleri için mükemmel olmasını beklediler. Sophie arkadaşlarıyla vakit geçirmek için heyecanlıydı.",
+    keywords: ["farmers market", "vegetables", "hiking", "mountains", "outdoor", "excited", "reserved"]
+  },
+  {
+    id: 7,
+    title: "Moving to a New City",
+    level: "Advanced",
+    text: "Relocating to an unfamiliar city presented numerous challenges for the young professional. She had to find an affordable apartment, establish a reliable transportation system, and build a social network from scratch. The process of searching for housing online proved to be tedious and time-consuming. She scheduled multiple viewings and eventually signed a lease for a modest studio apartment near her workplace. Adjusting to the faster pace of city life required considerable patience and perseverance. Nevertheless, she gradually adapted to her new environment and began to feel a sense of belonging.",
+    turkish: "Genç profesyonel için tanımadığı bir şehre taşınmak çok sayıda zorluk ortaya koydu. Uygun fiyatlı bir daire bulması, güvenilir bir ulaşım sistemi kurması ve sıfırdan bir sosyal ağ oluşturması gerekiyordu. Konut arama süreci yorucu ve zaman alıcıydı. Birçok gösterim planladı ve sonunda iş yerine yakın mütevazi bir stüdyo daire için lease imzaladı. Şehir hayatının daha hızlı temposuna alışmak, oldukça sabır ve azim gerektirdi. Yine de kademeli olarak yeni çevresine uyum sağladı ve bir aidiyet duygusu hissetmeye başladı.",
+    keywords: ["relocating", "numerous", "affordable", "scratch", "tedious", "lease", "perseverance", "belonging"]
+  },
+  {
+    id: 8,
+    title: "The Book Club",
+    level: "Intermediate",
+    text: "Every Thursday evening, a group of literature enthusiasts gathers at the local library to discuss their latest read. The club has been operating for over five years and currently has fifteen members. This month they are analyzing a classic novel by a well-known author. Each member comes prepared with notes and questions to share. The discussions are always lively and thought-provoking. Some members agree on certain interpretations while others offer alternative perspectives. The club promotes a respectful environment where everyone's opinion is valued.",
+    turkish: "Her perşembe akşamı, bir grup edebiyat meraklısı en son okudukları kitabı tartışmak için yerel kütüphanede buluşur. Kulüp beş yıldan fazla süredir faaliyet gösteriyor ve şu anda on beş üyesi var. Bu ay ünlü bir yazarın klasik bir romanını analiz ediyorlar. Her üye paylaşmak için notlar ve sorularla hazırlanır. Tartışmalar her zaman canlı ve düşündürücüdür. Bazı üyeler belirli yorumlar konusunda hemfikirken, diğerleri alternatif perspektifler sunuyor. Kulüp, herkesin fikrinin değerli görüldüğü saygılı bir ortamı teşvik ediyor.",
+    keywords: ["literature", "enthusiast", "analyzing", "interpretations", "alternative", "perspective", "promotes"]
+  },
+  {
+    id: 9,
+    title: "Health and Lifestyle",
+    level: "Intermediate",
+    text: "Modern sedentary lifestyles have contributed to a significant increase in health problems worldwide. Medical experts recommend engaging in regular physical exercise and maintaining a balanced diet. Studies show that people who walk for at least thirty minutes daily experience reduced stress levels and improved sleep quality. Additionally, limiting screen time and taking regular breaks from work can prevent eye strain and back pain. Following these simple guidelines can lead to a healthier and more productive life.",
+    turkish: "Modern hareketsiz yaşam tarzları dünya genelinde sağlık sorunlarının önemli ölçüde artmasına katkıda bulunmuştur. Tıp uzmanları düzenli fiziksel egzersiz yapmayı ve dengeli beslenmeyi öneriyor. Çalışmalar, günde en az otuz dakika yürüyen kişilerin stres seviyelerinde azalma ve uyku kalitesinde iyileşme yaşadığını gösteriyor. Ayrıca, ekran süresini sınırlamak ve işten düzenli molalar vermek göz yorgunluğunu ve sırt ağrısını önleyebilir. Bu basit yönergeleri takip etmek daha sağlıklı ve üretken bir yaşama yol açabilir.",
+    keywords: ["sedentary", "contribute", "balanced diet", "stress", "productive", "guidelines", "prevent"]
+  },
+  {
+    id: 10,
+    title: "Technology and Communication",
+    level: "Advanced",
+    text: "The advent of smartphones has revolutionized the way people communicate and access information. While these devices have undoubtedly enhanced convenience and connectivity, they have also raised concerns about privacy and digital addiction. Many individuals spend excessive hours on social media platforms, often at the expense of real-world interactions. Furthermore, the constant bombardment of notifications can lead to decreased concentration and mental fatigue. Experts suggest implementing digital wellness strategies to maintain a healthy relationship with technology.",
+    turkish: "Akıllı telefonların ortaya çıkışı, insanların iletişim kurma ve bilgiye erişme biçimini devrimleştirdi. Bu cihazlar kuşkusuz kolaylık ve bağlantıyı artırmış olsa da, gizlilik ve dijital bağımlılık konusunda endişeleri de artırmıştır. Birçok kişi gerçek dünya etkileşimleri pahasına sosyal medya platformlarında aşırı saatler geçiriyor. Üstelik sürekli bildiri bombardımanı konsantrasyonun azalmasına ve zihinsel yorgunluğa yol açabilir. Uzmanlar teknolojiyle sağlıklı bir ilişki sürdürmek için dijital sağlık stratejileri uygulamayı öneriyor.",
+    keywords: ["advent", "revolutionized", "undoubtedly", "connectivity", "bombardment", "fatigue", "wellness"]
+  }
 ];
 
 let readingLearnedWords = JSON.parse(localStorage.getItem('ydt_reading_words') || '{}');
 
 function _saveReadingWords() {
-    localStorage.setItem('ydt_reading_words', JSON.stringify(readingLearnedWords));
+  localStorage.setItem('ydt_reading_words', JSON.stringify(readingLearnedWords));
 }
 
 function showReading() {
-    showScreen('screen-reading');
-    renderReadingHome();
+  showScreen('screen-reading');
+  renderReadingHome();
 }
 
 function renderReadingHome() {
-    const s = document.getElementById('screen-reading');
-    const completed = Object.keys(readingLearnedWords).filter(k => readingLearnedWords[k]).length;
-    
-    s.innerHTML = `
+  const s = document.getElementById('screen-reading');
+  const completed = Object.keys(readingLearnedWords).filter(k => readingLearnedWords[k]).length;
+
+  s.innerHTML = `
         <div class="unit-header">
             <button class="back-btn" onclick="goHome()">←</button>
             <div>
@@ -5436,23 +5396,23 @@ let readingFlashKnown = [];
 let readingFlashUnknown = [];
 
 function openReading(id) {
-    const passage = READING_PASSAGES.find(p => p.id === id);
-    if (!passage) return;
-    const s = document.getElementById('screen-reading');
-    const isDone = readingLearnedWords[id];
-    
-    const keywordsHtml = passage.keywords.map(w => {
-        const knownWord = readingLearnedWords[passage.id + '_' + w];
-        const style = knownWord 
-            ? 'background:rgba(46,204,113,0.15);border:1px solid rgba(46,204,113,0.4);border-radius:8px;padding:8px 10px;cursor:pointer;text-align:center;font-size:13px;font-weight:600;color:var(--success);display:flex;align-items:center;justify-content:space-between;gap:6px'
-            : 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;text-align:center;font-size:13px;font-weight:600;color:var(--accent);display:flex;align-items:center;justify-content:space-between;gap:6px';
-        return `<div class="reading-kw ${knownWord ? 'known' : ''}" data-word="${w}" data-passage-id="${passage.id}" style="${style}">
+  const passage = READING_PASSAGES.find(p => p.id === id);
+  if (!passage) return;
+  const s = document.getElementById('screen-reading');
+  const isDone = readingLearnedWords[id];
+
+  const keywordsHtml = passage.keywords.map(w => {
+    const knownWord = readingLearnedWords[passage.id + '_' + w];
+    const style = knownWord
+      ? 'background:rgba(46,204,113,0.15);border:1px solid rgba(46,204,113,0.4);border-radius:8px;padding:8px 10px;cursor:pointer;text-align:center;font-size:13px;font-weight:600;color:var(--success);display:flex;align-items:center;justify-content:space-between;gap:6px'
+      : 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;text-align:center;font-size:13px;font-weight:600;color:var(--accent);display:flex;align-items:center;justify-content:space-between;gap:6px';
+    return `<div class="reading-kw ${knownWord ? 'known' : ''}" data-word="${w}" data-passage-id="${passage.id}" style="${style}">
             <span onclick="event.stopPropagation();showReadingWordPopup('${w}', this)">${w}</span>
             <span style="font-size:11px;opacity:0.7">${knownWord ? '✓' : '👆'}</span>
         </div>`;
-    }).join('');
-    
-    s.innerHTML = `
+  }).join('');
+
+  s.innerHTML = `
         <div class="unit-header">
             <button class="back-btn" onclick="renderReadingHome()">←</button>
             <div>
@@ -5485,37 +5445,37 @@ function openReading(id) {
             <div id="reading-word-popup-card" style="background:var(--card);border-radius:20px;padding:24px;max-width:340px;width:100%;text-align:center"></div>
         </div>
     `;
-    
-    document.getElementById('reading-word-popup').addEventListener('click', function(e) {
-        if (e.target === this) hideReadingWordPopup();
-    });
+
+  document.getElementById('reading-word-popup').addEventListener('click', function (e) {
+    if (e.target === this) hideReadingWordPopup();
+  });
 }
 
 async function showReadingWordPopup(word, el) {
-    const popup = document.getElementById('reading-word-popup');
-    const card = document.getElementById('reading-word-popup-card');
-    card.innerHTML = `<div style="font-size:36px;margin-bottom:8px">🔍</div><div class="spinner" style="margin:0 auto"></div><div style="color:var(--text3);margin-top:8px;font-size:13px">Aranıyor...</div>`;
-    popup.style.display = 'flex';
-    
-    const kwElement = el.closest('.reading-kw');
-    const passageId = kwElement?.dataset?.passageId;
-    
-    const data = await fetchDictData(word);
-    if (!data) {
-        card.innerHTML = `
+  const popup = document.getElementById('reading-word-popup');
+  const card = document.getElementById('reading-word-popup-card');
+  card.innerHTML = `<div style="font-size:36px;margin-bottom:8px">🔍</div><div class="spinner" style="margin:0 auto"></div><div style="color:var(--text3);margin-top:8px;font-size:13px">Aranıyor...</div>`;
+  popup.style.display = 'flex';
+
+  const kwElement = el.closest('.reading-kw');
+  const passageId = kwElement?.dataset?.passageId;
+
+  const data = await fetchDictData(word);
+  if (!data) {
+    card.innerHTML = `
             <div style="font-size:36px;margin-bottom:8px">❌</div>
             <div style="font-size:18px;font-weight:800;color:var(--text)">${word}</div>
             <div style="color:var(--error);margin-top:8px">Anlam bulunamadı</div>
             <button onclick="hideReadingWordPopup()" style="margin-top:16px;padding:10px 24px;background:var(--accent);color:white;border:none;border-radius:10px;font-weight:600;cursor:pointer">Kapat</button>
         `;
-        return;
-    }
-    
-    const mainMeaning = data.meanings[0];
-    const firstDef = mainMeaning?.definitions?.[0];
-    const examples = mainMeaning?.examples?.slice(0, 1)[0];
-    
-    card.innerHTML = `
+    return;
+  }
+
+  const mainMeaning = data.meanings[0];
+  const firstDef = mainMeaning?.definitions?.[0];
+  const examples = mainMeaning?.examples?.slice(0, 1)[0];
+
+  card.innerHTML = `
         <div style="font-size:40px;font-weight:800;color:var(--accent);margin-bottom:4px">${data.word}</div>
         ${data.phonetic ? `<div style="color:var(--text3);font-size:14px;font-style:italic;margin-bottom:12px">${data.phonetic}</div>` : ''}
         ${data.turkish ? `<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:12px">${data.turkish}</div>` : ''}
@@ -5535,52 +5495,52 @@ async function showReadingWordPopup(word, el) {
         </div>
         <button onclick="hideReadingWordPopup()" style="padding:10px 24px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;font-weight:600;cursor:pointer">Kapat</button>
     `;
-    
-    if (kwElement) {
-        const w = kwElement.dataset.word;
-        const pId = kwElement.dataset.passageId;
-        if (pId && w) {
-            readingLearnedWords[pId + '_' + w] = true;
-            _saveReadingWords();
-        }
+
+  if (kwElement) {
+    const w = kwElement.dataset.word;
+    const pId = kwElement.dataset.passageId;
+    if (pId && w) {
+      readingLearnedWords[pId + '_' + w] = true;
+      _saveReadingWords();
     }
+  }
 }
 
 function hideReadingWordPopup() {
-    const popup = document.getElementById('reading-word-popup');
-    if (popup) popup.style.display = 'none';
+  const popup = document.getElementById('reading-word-popup');
+  if (popup) popup.style.display = 'none';
 }
 
 async function startReadingFlash(id) {
-    const passage = READING_PASSAGES.find(p => p.id === id);
-    if (!passage || passage.keywords.length === 0) { showToast('Bu metinde kelime yok!'); return; }
-    
-    showScreen('screen-reading');
-    readingFlashCards = [];
-    readingFlashIdx = 0;
-    readingFlashKnown = [];
-    readingFlashUnknown = [];
-    
-    for (const kw of passage.keywords) {
-        const data = await fetchDictData(kw);
-        readingFlashCards.push({
-            word: kw,
-            turkish: data?.turkish || '',
-            definition: data?.meanings?.[0]?.definitions?.[0] || '',
-            example: data?.meanings?.[0]?.example || ''
-        });
-    }
-    
-    readingFlashCards = shuffle(readingFlashCards);
-    renderReadingFlash(id);
+  const passage = READING_PASSAGES.find(p => p.id === id);
+  if (!passage || passage.keywords.length === 0) { showToast('Bu metinde kelime yok!'); return; }
+
+  showScreen('screen-reading');
+  readingFlashCards = [];
+  readingFlashIdx = 0;
+  readingFlashKnown = [];
+  readingFlashUnknown = [];
+
+  for (const kw of passage.keywords) {
+    const data = await fetchDictData(kw);
+    readingFlashCards.push({
+      word: kw,
+      turkish: data?.turkish || '',
+      definition: data?.meanings?.[0]?.definitions?.[0] || '',
+      example: data?.meanings?.[0]?.example || ''
+    });
+  }
+
+  readingFlashCards = shuffle(readingFlashCards);
+  renderReadingFlash(id);
 }
 
 function renderReadingFlash(id) {
-    const s = document.getElementById('screen-reading');
-    if (readingFlashIdx >= readingFlashCards.length) {
-        const known = readingFlashKnown.length;
-        const total = readingFlashCards.length;
-        s.innerHTML = `
+  const s = document.getElementById('screen-reading');
+  if (readingFlashIdx >= readingFlashCards.length) {
+    const known = readingFlashKnown.length;
+    const total = readingFlashCards.length;
+    s.innerHTML = `
             <div class="result-wrap">
                 <div class="result-emoji">${known === total ? '🏆' : known > total / 2 ? '💪' : '📚'}</div>
                 <div class="result-title">${known === total ? 'Mükemmel!' : 'Sonuçlar'}</div>
@@ -5592,13 +5552,13 @@ function renderReadingFlash(id) {
                 ${readingFlashUnknown.length > 0 ? `<button class="result-btn" onclick="readingFlashCards=shuffle([...readingFlashUnknown]);readingFlashIdx=0;readingFlashKnown=[];readingFlashUnknown=[];renderReadingFlash(${id})">Bilemediklerimi Tekrar Et</button>` : ''}
                 <button class="result-btn outline" onclick="openReading(${id})">← Geri Dön</button>
             </div>`;
-        return;
-    }
-    
-    const card = readingFlashCards[readingFlashIdx];
-    const pct = Math.round((readingFlashIdx / readingFlashCards.length) * 100);
-    
-    s.innerHTML = `
+    return;
+  }
+
+  const card = readingFlashCards[readingFlashIdx];
+  const pct = Math.round((readingFlashIdx / readingFlashCards.length) * 100);
+
+  s.innerHTML = `
         <div class="unit-header">
             <button class="back-btn" onclick="openReading(${id})">←</button>
             <div>
@@ -5634,34 +5594,34 @@ function renderReadingFlash(id) {
 }
 
 function flipReadingCard() {
-    const fc = document.getElementById('reading-fc');
-    if (fc) fc.classList.toggle('flipped');
+  const fc = document.getElementById('reading-fc');
+  if (fc) fc.classList.toggle('flipped');
 }
 
 function readingFlashAnswer(known, id) {
-    const card = readingFlashCards[readingFlashIdx];
-    if (known) {
-        readingFlashKnown.push(card);
-    } else {
-        readingFlashUnknown.push(card);
-    }
-    readingFlashIdx++;
-    setTimeout(() => renderReadingFlash(id), 300);
+  const card = readingFlashCards[readingFlashIdx];
+  if (known) {
+    readingFlashKnown.push(card);
+  } else {
+    readingFlashUnknown.push(card);
+  }
+  readingFlashIdx++;
+  setTimeout(() => renderReadingFlash(id), 300);
 }
 
 function toggleReadingWord(btn, id) {
-    readingLearnedWords[id] = !readingLearnedWords[id];
-    _saveReadingWords();
-    if (readingLearnedWords[id]) {
-        btn.style.background = 'var(--success)';
-        btn.style.color = 'white';
-        btn.textContent = '✓ Tamamlandı';
-        showToast('Metin tamamlandı! ✓');
-    } else {
-        btn.style.background = 'var(--card)';
-        btn.style.color = 'var(--text)';
-        btn.textContent = '✓ Tamamla';
-    }
+  readingLearnedWords[id] = !readingLearnedWords[id];
+  _saveReadingWords();
+  if (readingLearnedWords[id]) {
+    btn.style.background = 'var(--success)';
+    btn.style.color = 'white';
+    btn.textContent = '✓ Tamamlandı';
+    showToast('Metin tamamlandı! ✓');
+  } else {
+    btn.style.background = 'var(--card)';
+    btn.style.color = 'var(--text)';
+    btn.textContent = '✓ Tamamla';
+  }
 }
 
 window.showReading = showReading;
@@ -5677,259 +5637,259 @@ let dictCache = JSON.parse(localStorage.getItem('ydt_dict_cache') || '{}');
 let dictHistory = JSON.parse(localStorage.getItem('ydt_dict_history') || '[]');
 
 function _saveDictCache() {
-    localStorage.setItem('ydt_dict_cache', JSON.stringify(dictCache));
+  localStorage.setItem('ydt_dict_cache', JSON.stringify(dictCache));
 }
 function _saveDictHistory() {
-    localStorage.setItem('ydt_dict_history', JSON.stringify(dictHistory));
+  localStorage.setItem('ydt_dict_history', JSON.stringify(dictHistory));
 }
 
 async function fetchTurkishMeaning(word) {
-    const cacheKey = `ydt_tr_${word.toLowerCase().trim()}`;
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) return cached;
-    
-    // Try LibreTranslate public instances (CORS-friendly, tried in order)
-    const libreInstances = [
-        'https://translate.argosopentech.com/translate',
-        'https://translate.terraprint.co/translate',
-        'https://libretranslate.com/translate',
-    ];
-    for (const libreUrl of libreInstances) {
-        try {
-            const response = await fetch(libreUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ q: word, source: 'en', target: 'tr', format: 'text', api_key: '' })
-            });
-            if (response.ok) {
-                const data = await response.json();
-                if (data?.translatedText) {
-                    const result = data.translatedText.trim();
-                    if (result.toLowerCase() !== word.toLowerCase() && result.length > 1) {
-                        localStorage.setItem(cacheKey, result);
-                        return result;
-                    }
-                }
-            }
-        } catch (e) {}
+  const cacheKey = `ydt_tr_${word.toLowerCase().trim()}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return cached;
+
+  // Try LibreTranslate public instances (CORS-friendly, tried in order)
+  const libreInstances = [
+    'https://translate.argosopentech.com/translate',
+    'https://translate.terraprint.co/translate',
+    'https://libretranslate.com/translate',
+  ];
+  for (const libreUrl of libreInstances) {
+    try {
+      const response = await fetch(libreUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: word, source: 'en', target: 'tr', format: 'text', api_key: '' })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.translatedText) {
+          const result = data.translatedText.trim();
+          if (result.toLowerCase() !== word.toLowerCase() && result.length > 1) {
+            localStorage.setItem(cacheKey, result);
+            return result;
+          }
+        }
+      }
+    } catch (e) { }
+  }
+
+  // Try MyMemory with better parameters (preferring dictionary/technical context)
+  try {
+    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|tr&de=eng`);
+    const data = await response.json();
+    if (data.responseStatus === 200 && data.responseData?.translatedText) {
+      const result = data.responseData.translatedText.trim();
+      // Validate - if translation is same as original or too short, try other source
+      if (result.toLowerCase() !== word.toLowerCase() && result.length > 2) {
+        localStorage.setItem(cacheKey, result);
+        return result;
+      }
     }
-    
-    // Try MyMemory with better parameters (preferring dictionary/technical context)
-    try {
-        const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|tr&de=eng`);
-        const data = await response.json();
-        if (data.responseStatus === 200 && data.responseData?.translatedText) {
-            const result = data.responseData.translatedText.trim();
-            // Validate - if translation is same as original or too short, try other source
-            if (result.toLowerCase() !== word.toLowerCase() && result.length > 2) {
-                localStorage.setItem(cacheKey, result);
-                return result;
-            }
-        }
-    } catch (e) {}
-    
-    // Try Google Translate as final fallback
-    try {
-        const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q=${encodeURIComponent(word)}`);
-        const data = await response.json();
-        if (data && data[0] && data[0][0]) {
-            const result = data[0][0][0].trim();
-            if (result.toLowerCase() !== word.toLowerCase() && result.length > 2) {
-                localStorage.setItem(cacheKey, result);
-                return result;
-            }
-        }
-    } catch (e) {}
-    
-    return '';
+  } catch (e) { }
+
+  // Try Google Translate as final fallback
+  try {
+    const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q=${encodeURIComponent(word)}`);
+    const data = await response.json();
+    if (data && data[0] && data[0][0]) {
+      const result = data[0][0][0].trim();
+      if (result.toLowerCase() !== word.toLowerCase() && result.length > 2) {
+        localStorage.setItem(cacheKey, result);
+        return result;
+      }
+    }
+  } catch (e) { }
+
+  return '';
 }
 
 async function fetchDictData(word) {
-    const w = word.toLowerCase().trim();
-    if (dictCache[w] && dictCache[w].turkish) return dictCache[w];
-    
-    // Try primary API: dictionaryapi.dev
-    try {
-        const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);
-        if (response.ok) {
-            const data = await response.json();
-            const entry = data[0];
-            if (entry && entry.meanings && entry.meanings.length > 0) {
-                const result = await buildDictResult(entry, w);
-                if (result && result.meanings.length > 0) {
-                    dictCache[w] = result;
-                    _saveDictCache();
-                    updateDictHistory(w);
-                    return result;
-                }
-            }
+  const w = word.toLowerCase().trim();
+  if (dictCache[w] && dictCache[w].turkish) return dictCache[w];
+
+  // Try primary API: dictionaryapi.dev
+  try {
+    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);
+    if (response.ok) {
+      const data = await response.json();
+      const entry = data[0];
+      if (entry && entry.meanings && entry.meanings.length > 0) {
+        const result = await buildDictResult(entry, w);
+        if (result && result.meanings.length > 0) {
+          dictCache[w] = result;
+          _saveDictCache();
+          updateDictHistory(w);
+          return result;
         }
-    } catch (e) {}
-    
-    // Fallback: Try datamuse API for definitions
-    try {
-        const response = await fetch(`https://api.datamuse.com/words?sp=${w}&md=d&max=5`);
-        if (response.ok) {
-            const data = await response.json();
-            if (data && data.length > 0) {
-                const result = await buildDictResultFromDatamuse(data, w);
-                if (result) {
-                    dictCache[w] = result;
-                    _saveDictCache();
-                    updateDictHistory(w);
-                    return result;
-                }
-            }
-        }
-    } catch (e) {}
-    
-    // Fallback: Try wordsapi (requires API key in localStorage)
-    const wordsApiKey = localStorage.getItem('ydt_wordsapi_key');
-    if (wordsApiKey) {
-        try {
-            const response = await fetch(`https://wordsapiv1.p.rapidapi.com/words/${w}/definitions`, {
-                headers: { 'X-RapidAPI-Key': wordsApiKey }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                if (data && data.definitions) {
-                    const [turkish, ...defTranslations] = await Promise.all([
-                        fetchTurkishMeaning(w),
-                        ...data.definitions.map(d => fetchTurkishMeaning(d.definition || ''))
-                    ]);
-                    const result = {
-                        word: w,
-                        phonetic: '',
-                        audio: '',
-                        turkish: turkish,
-                        meanings: data.definitions.map((d, idx) => ({
-                            partOfSpeech: d.partOfSpeech || '',
-                            definitions: [{ text: d.definition || '', turkish: defTranslations[idx] || '' }],
-                            synonyms: [],
-                            antonyms: [],
-                            examples: []
-                        }))
-                    };
-                    dictCache[w] = result;
-                    _saveDictCache();
-                    updateDictHistory(w);
-                    return result;
-                }
-            }
-        } catch (e) {}
+      }
     }
-    
-    return null;
+  } catch (e) { }
+
+  // Fallback: Try datamuse API for definitions
+  try {
+    const response = await fetch(`https://api.datamuse.com/words?sp=${w}&md=d&max=5`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const result = await buildDictResultFromDatamuse(data, w);
+        if (result) {
+          dictCache[w] = result;
+          _saveDictCache();
+          updateDictHistory(w);
+          return result;
+        }
+      }
+    }
+  } catch (e) { }
+
+  // Fallback: Try wordsapi (requires API key in localStorage)
+  const wordsApiKey = localStorage.getItem('ydt_wordsapi_key');
+  if (wordsApiKey) {
+    try {
+      const response = await fetch(`https://wordsapiv1.p.rapidapi.com/words/${w}/definitions`, {
+        headers: { 'X-RapidAPI-Key': wordsApiKey }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.definitions) {
+          const [turkish, ...defTranslations] = await Promise.all([
+            fetchTurkishMeaning(w),
+            ...data.definitions.map(d => fetchTurkishMeaning(d.definition || ''))
+          ]);
+          const result = {
+            word: w,
+            phonetic: '',
+            audio: '',
+            turkish: turkish,
+            meanings: data.definitions.map((d, idx) => ({
+              partOfSpeech: d.partOfSpeech || '',
+              definitions: [{ text: d.definition || '', turkish: defTranslations[idx] || '' }],
+              synonyms: [],
+              antonyms: [],
+              examples: []
+            }))
+          };
+          dictCache[w] = result;
+          _saveDictCache();
+          updateDictHistory(w);
+          return result;
+        }
+      }
+    } catch (e) { }
+  }
+
+  return null;
 }
 
 async function buildDictResult(entry, w) {
-    const turkish = await fetchTurkishMeaning(w);
-    const result = {
-        word: w,
-        phonetic: entry.phonetic || entry.phonetics?.[0]?.text || '',
-        audio: entry.phonetics?.find(p => p.audio)?.audio || '',
-        turkish: turkish,
-        meanings: []
-    };
-    
-    for (const meaning of entry.meanings || []) {
-        const syns = meaning.synonyms?.slice(0, 10) || [];
-        const ants = meaning.antonyms?.slice(0, 10) || [];
-        
-        const defPromises = (meaning.definitions || []).map(d => 
-            d.definition ? fetchTurkishMeaning(d.definition) : Promise.resolve('')
-        );
-        const defTranslations = await Promise.all(defPromises);
-        const defs = (meaning.definitions || []).map((d, idx) => ({
-            text: d.definition || '',
-            turkish: defTranslations[idx] || ''
-        }));
-        
-        const exPromises = (meaning.definitions || [])
-            .filter(d => d.example)
-            .slice(0, 3)
-            .map(d => fetchTurkishMeaning(d.example).then(tr => ({ original: d.example, turkish: tr || '' })));
-        const resolvedExamples = exPromises.length > 0 ? await Promise.all(exPromises) : [];
-        
-        result.meanings.push({
-            partOfSpeech: meaning.partOfSpeech || '',
-            definitions: defs,
-            synonyms: syns,
-            antonyms: ants,
-            examples: resolvedExamples
-        });
-    }
-    return result;
+  const turkish = await fetchTurkishMeaning(w);
+  const result = {
+    word: w,
+    phonetic: entry.phonetic || entry.phonetics?.[0]?.text || '',
+    audio: entry.phonetics?.find(p => p.audio)?.audio || '',
+    turkish: turkish,
+    meanings: []
+  };
+
+  for (const meaning of entry.meanings || []) {
+    const syns = meaning.synonyms?.slice(0, 10) || [];
+    const ants = meaning.antonyms?.slice(0, 10) || [];
+
+    const defPromises = (meaning.definitions || []).map(d =>
+      d.definition ? fetchTurkishMeaning(d.definition) : Promise.resolve('')
+    );
+    const defTranslations = await Promise.all(defPromises);
+    const defs = (meaning.definitions || []).map((d, idx) => ({
+      text: d.definition || '',
+      turkish: defTranslations[idx] || ''
+    }));
+
+    const exPromises = (meaning.definitions || [])
+      .filter(d => d.example)
+      .slice(0, 3)
+      .map(d => fetchTurkishMeaning(d.example).then(tr => ({ original: d.example, turkish: tr || '' })));
+    const resolvedExamples = exPromises.length > 0 ? await Promise.all(exPromises) : [];
+
+    result.meanings.push({
+      partOfSpeech: meaning.partOfSpeech || '',
+      definitions: defs,
+      synonyms: syns,
+      antonyms: ants,
+      examples: resolvedExamples
+    });
+  }
+  return result;
 }
 
 async function buildDictResultFromDatamuse(data, w) {
-    const turkish = await fetchTurkishMeaning(w);
-    const result = {
-        word: w,
-        phonetic: '',
-        audio: '',
-        turkish: turkish,
-        meanings: []
-    };
-    
-    const defs = [];
-    const syns = [];
-    
-    data.forEach(item => {
-        if (item.defs && item.defs.length > 0) {
-            item.defs.forEach(d => {
-                const [pos, def] = d.split('\t');
-                if (def) {
-                    defs.push({ text: def, turkish: '' });
-                }
-            });
+  const turkish = await fetchTurkishMeaning(w);
+  const result = {
+    word: w,
+    phonetic: '',
+    audio: '',
+    turkish: turkish,
+    meanings: []
+  };
+
+  const defs = [];
+  const syns = [];
+
+  data.forEach(item => {
+    if (item.defs && item.defs.length > 0) {
+      item.defs.forEach(d => {
+        const [pos, def] = d.split('\t');
+        if (def) {
+          defs.push({ text: def, turkish: '' });
         }
-        if (item.tags && item.tags.forEach) {
-            item.tags.forEach(tag => {
-                if (tag.startsWith('syn:')) {
-                    syns.push(tag.substring(4));
-                }
-            });
-        }
-    });
-    
-    if (defs.length > 0) {
-        // Translate definitions in batch
-        const defTexts = defs.map(d => d.text);
-        const translations = await Promise.all(defTexts.map(t => fetchTurkishMeaning(t)));
-        defs.forEach((d, i) => {
-            d.turkish = translations[i] || '';
-        });
-        
-        result.meanings.push({
-            partOfSpeech: defs.length > 0 ? 'noun' : '',
-            definitions: defs.slice(0, 5),
-            synonyms: [...new Set(syns)].slice(0, 10),
-            antonyms: [],
-            examples: []
-        });
-        return result;
+      });
     }
-    
-    return null;
+    if (item.tags && item.tags.forEach) {
+      item.tags.forEach(tag => {
+        if (tag.startsWith('syn:')) {
+          syns.push(tag.substring(4));
+        }
+      });
+    }
+  });
+
+  if (defs.length > 0) {
+    // Translate definitions in batch
+    const defTexts = defs.map(d => d.text);
+    const translations = await Promise.all(defTexts.map(t => fetchTurkishMeaning(t)));
+    defs.forEach((d, i) => {
+      d.turkish = translations[i] || '';
+    });
+
+    result.meanings.push({
+      partOfSpeech: defs.length > 0 ? 'noun' : '',
+      definitions: defs.slice(0, 5),
+      synonyms: [...new Set(syns)].slice(0, 10),
+      antonyms: [],
+      examples: []
+    });
+    return result;
+  }
+
+  return null;
 }
 
 function updateDictHistory(w) {
-    if (!dictHistory.includes(w)) {
-        dictHistory.unshift(w);
-        if (dictHistory.length > 50) dictHistory.pop();
-        _saveDictHistory();
-    }
+  if (!dictHistory.includes(w)) {
+    dictHistory.unshift(w);
+    if (dictHistory.length > 50) dictHistory.pop();
+    _saveDictHistory();
+  }
 }
 
 function showDictionary() {
-    showScreen('screen-dict');
-    renderDict();
+  showScreen('screen-dict');
+  renderDict();
 }
 
 function renderDict() {
-    const s = document.getElementById('screen-dict');
-    s.innerHTML = `
+  const s = document.getElementById('screen-dict');
+  s.innerHTML = `
         <div class="unit-header">
             <button class="back-btn" onclick="goHome()">←</button>
             <div>
@@ -5949,28 +5909,28 @@ function renderDict() {
             <div id="dict-result"></div>
         </div>
     `;
-    const input = document.getElementById('dict-input');
-    if (input) input.focus();
+  const input = document.getElementById('dict-input');
+  if (input) input.focus();
 }
 
 function dictSearch() {
-    const val = document.getElementById('dict-input').value.trim();
-    if (!val) return;
-    dictSearchWord(val);
+  const val = document.getElementById('dict-input').value.trim();
+  if (!val) return;
+  dictSearchWord(val);
 }
 
 async function dictSearchWord(word) {
-    if (!document.getElementById('dict-result')) renderDict();
-    const resultEl = document.getElementById('dict-result');
-    if (!resultEl) return;
-    resultEl.innerHTML = `<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="margin-top:10px;color:var(--text3)">Aranıyor...</div></div>`;
-    const data = await fetchDictData(word);
-    if (!data) {
-        resultEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--error)">❌ "${word}" bulunamadı</div>`;
-        return;
-    }
-    
-    let html = `<div style="margin-top:16px">
+  if (!document.getElementById('dict-result')) renderDict();
+  const resultEl = document.getElementById('dict-result');
+  if (!resultEl) return;
+  resultEl.innerHTML = `<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="margin-top:10px;color:var(--text3)">Aranıyor...</div></div>`;
+  const data = await fetchDictData(word);
+  if (!data) {
+    resultEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--error)">❌ "${word}" bulunamadı</div>`;
+    return;
+  }
+
+  let html = `<div style="margin-top:16px">
         <div style="background:var(--card);border-radius:16px;padding:20px;margin-bottom:20px;border:2px solid var(--accent)">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
                 <span style="font-size:36px;font-weight:800;color:var(--accent)">${data.word}</span>
@@ -5979,64 +5939,91 @@ async function dictSearchWord(word) {
             </div>
             ${data.turkish ? `<div style="font-size:20px;color:var(--text);font-weight:600;border-top:1px solid var(--border);padding-top:12px;margin-top:4px">${data.turkish}</div>` : ''}
         </div>`;
-    
-    for (let i = 0; i < data.meanings.length; i++) {
-        const m = data.meanings[i];
-        html += `<div style="margin-bottom:20px;padding:16px;background:var(--card);border-radius:14px;border:1px solid var(--border)">
+
+  for (let i = 0; i < data.meanings.length; i++) {
+    const m = data.meanings[i];
+    html += `<div style="margin-bottom:20px;padding:16px;background:var(--card);border-radius:14px;border:1px solid var(--border)">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
                 <span style="background:var(--accent);color:white;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase">${m.partOfSpeech}</span>
                 <span style="font-size:12px;color:var(--text3)">Anlam ${i + 1}</span>
             </div>`;
-        
-        if (m.definitions && m.definitions.length > 0) {
-            html += `<div style="margin-bottom:12px">
+
+    if (m.definitions && m.definitions.length > 0) {
+      html += `<div style="margin-bottom:12px">
                 <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">📖 TANIMLAR</div>`;
-            m.definitions.forEach((def, idx) => {
-                html += `<div style="margin-bottom:10px;padding:12px;background:var(--bg);border-radius:10px">
+      m.definitions.forEach((def, idx) => {
+        html += `<div style="margin-bottom:10px;padding:12px;background:var(--bg);border-radius:10px">
                     <div style="display:flex;gap:8px;margin-bottom:4px">
                         <span style="background:var(--accent);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px">${idx + 1}</span>
                         <span style="font-size:14px;color:var(--text);line-height:1.5">${def.text}</span>
                     </div>
                     ${def.turkish ? `<div style="font-size:13px;color:var(--text2);line-height:1.4;padding-left:30px;margin-top:2px">→ ${def.turkish}</div>` : ''}
                 </div>`;
-            });
-            html += `</div>`;
-        }
-        
-        if (m.examples && m.examples.length > 0) {
-            html += `<div style="margin-bottom:12px">
+      });
+      html += `</div>`;
+    }
+
+    if (m.examples && m.examples.length > 0) {
+      html += `<div style="margin-bottom:12px">
                 <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:8px">💬 ÖRNEK CÜMLELER</div>`;
-            m.examples.forEach(ex => {
-                html += `<div style="margin-bottom:10px;padding:12px;background:rgba(98,129,65,0.1);border-radius:8px;border-left:3px solid var(--accent)">
+      m.examples.forEach(ex => {
+        html += `<div style="margin-bottom:10px;padding:12px;background:rgba(98,129,65,0.1);border-radius:8px;border-left:3px solid var(--accent)">
                     <div style="font-size:14px;color:var(--text);font-style:italic;margin-bottom:4px">"${ex.original}"</div>
                     ${ex.turkish ? `<div style="font-size:13px;color:var(--text2);line-height:1.4">→ ${ex.turkish}</div>` : ''}
                 </div>`;
-            });
-            html += `</div>`;
-        }
-        
-        if (m.synonyms.length > 0) {
-            html += `<div style="margin-bottom:10px">
+      });
+      html += `</div>`;
+    }
+
+    if (m.synonyms.length > 0) {
+      html += `<div style="margin-bottom:10px">
                 <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">🔗 EŞ ANLAMLILAR</div>
                 <div style="display:flex;flex-wrap:wrap;gap:6px">${m.synonyms.map(s => `<span onclick="dictSearchWord('${s}')" style="background:rgba(46,204,113,0.15);color:#27ae60;padding:6px 12px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(46,204,113,0.3)">${s}</span>`).join('')}</div>
             </div>`;
-        }
-        
-        if (m.antonyms.length > 0) {
-            html += `<div>
+    }
+
+    if (m.antonyms.length > 0) {
+      html += `<div>
                 <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">↔️ ZIT ANLAMLILAR</div>
                 <div style="display:flex;flex-wrap:wrap;gap:6px">${m.antonyms.map(s => `<span onclick="dictSearchWord('${s}')" style="background:rgba(231,76,60,0.15);color:#e74c3c;padding:6px 12px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(231,76,60,0.3)">${s}</span>`).join('')}</div>
             </div>`;
-        }
-        html += `</div>`;
     }
     html += `</div>`;
-    resultEl.innerHTML = html;
-    document.getElementById('dict-input').value = word;
+  }
+
+  // Save & actions row
+  html += `
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+      <button onclick="dictAddToErrorBox('${escQ(data.word)}','${escQ(data.turkish || '')}')" style="flex:1;min-width:140px;padding:12px 16px;background:rgba(231,76,60,0.1);border:1.5px solid rgba(231,76,60,0.3);border-radius:12px;color:#e74c3c;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        <span style="font-size:15px">⚠️</span> Hatalara Ekle
+      </button>
+      <button onclick="dictMarkLearned('${escQ(data.word)}')" style="flex:1;min-width:140px;padding:12px 16px;background:rgba(46,204,113,0.1);border:1.5px solid rgba(46,204,113,0.3);border-radius:12px;color:#27ae60;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        <span style="font-size:15px">✓</span> Öğrendim
+      </button>
+    </div>
+    <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:12px;color:var(--text3)">${dictHistory.length} kelime arandı</span>
+      <button onclick="clearDictHistory()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline">Geçmişi temizle</button>
+    </div>
+  `;
+  html += `</div>`;
+  resultEl.innerHTML = html;
+  document.getElementById('dict-input').value = word;
+  _trackQuestStat('wordsViewed');
+}
+
+function dictAddToErrorBox(word, turkish) {
+  errorBox['dict_' + word] = { word, meaning: turkish, unit: 0 };
+  saveErrors();
+  showToast('⚠️ Hata kumbarasına eklendi!');
+}
+
+function dictMarkLearned(word) {
+  showToast('✓ "' + word + '" öğrenildi olarak işaretlendi!');
 }
 
 function clearDictHistory() {
-    dictHistory = [];
-    _saveDictHistory();
-    renderDict();
+  dictHistory = [];
+  _saveDictHistory();
+  renderDict();
 }
